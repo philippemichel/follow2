@@ -271,6 +271,47 @@ rech[,8] = rowSums(rech[,7:8], na.rm =TRUE)
 rech <- rech |> 
   mutate_all(~ ifelse(.x > 0, "Relapse", "No Relapse")) |> 
   mutate(id = tt$patient) |> 
-  pivot_longer(cols = 1:8, names_to = "mois", values_to = "rechute")
+  mutate(tt_initial = tt$tt_initial) |>
+  pivot_longer(cols = 1:8, names_to = "mois", values_to = "rechute") |> 
+  mutate_all(as.factor)
+
+## Recodage de rech$mois en rech$mois_rec
+rech$mois <- rech$mois |>
+  fct_recode(
+    "M 12" = "if_alive_disease_status_m12",
+    "M18" = "if_alive_disease_status_m18",
+    "M 24" = "if_alive_disease_status_m24",
+    "M 30" = "if_alive_disease_status_m30",
+    "M 36" = "if_alive_disease_status_m36",
+    "M 42" = "if_alive_disease_status_m42",
+    "M 48" = "if_alive_disease_status_m48",
+    "M 6" = "if_alive_disease_status_m6"
+  )
+rech$mois <- rech$mois |>
+  fct_relevel(
+    "M 6", "M 12", "M18", "M 24", "M 30", "M 36", "M 42", "M 48"
+  )
+
 ```
 
+```{r}
+#| label: tbl-rechutes1
+#| tbl-cap: Rechute en fonction du traitement initial
+
+tt$rechute <- as.factor(ifelse(rechute > 0, "Relapse", "No Relapse"))
+
+tt |> 
+  dplyr::select(tt_initial, rechute) |> 
+  tbl_summary(by = tt_initial,
+              statistic = stt,
+              sort = all_categorical() ~ "frequency") |> 
+  bold_labels() |> 
+  add_overall(col_label = "**Total**  \nN = {style_number(N)}",) |> 
+  add_p(test = ptest) |>
+  bold_p() |>
+   modify_header(label ~ " ") |>
+  pexptabph(exp = expx, nomfich = classeur , nomsheet = "rechutes1", lg = TRUE)
+
+```
+
+Sur ce petit échantillon le nombre de rechute ne semble pas lié au traitement initial.
