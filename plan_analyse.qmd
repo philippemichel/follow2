@@ -1,0 +1,94 @@
+---
+subtitle: "Plan d'analyse statistique"
+lof: false
+lot: false
+---
+
+# Généralités
+
+Le risque $\alpha$ retenu sera de \num{0.05} & la puissance de \num{0.8}.
+
+ Les variables numériques seront présentées par leur moyenne & écart-type & comparées grâce à des tests paramétriques en particulier le test de Student ou l'\gls{anova} si il y a plus de deux catégories dans la variable de tri. Les variables discrètes seront présentées en nombre avec le pourcentage & son intervalle de confiance (à 95 %) calculé par bootstrap (package `boot` [@boot]). Le test du $\chi^2$ de Spearman sera utilisé sous réserve d'un effectif suffisant, à défaut le test exact de Fischer. Des graphiques seront réalisés pour les résultats importants (package `ggplot2` [@ggplot]).
+
+## Taille de l'échantillon
+
+Il s'agit d'une étude ancillaire basée sur un registre. L'estimation faite par le promoteur serait de 256 cas présents dans l'étude (patients de plus de 80 ans présents dans le registre FOLLOW). 
+
+## Données manquantes
+
+Le décompte des données manquantes sera réalisé & présenté par un tableau ou un graphique. Les lecteurs ayant trop de données manquantes ou non utilisables (\> 20 %) ne seront pas pris en compte après validation par le promoteur. Sinon les données manquantes seront imputées (\glspl{imput} multiples, 150 itérations au maximum --- package `missMDA`[@missmda]) si considérées comme manquant de manière complètement aléatoire (`MCAR`) ou manquant de manière aléatoire (`MAR`).
+
+## Qualité des données
+
+Une analyse de corrélation (package `corr` [@corr]) entre les variables sera réalisée & présentée sur un graphique de corrélation pour chaque stade du suivi (inclusion , un an, instauration d'une nouvelle ligne de traitement\dots). Si certaines variables se montrent anormalement corrélées elles devront être exclues de l'étude après accord du promoteur.
+
+# Description de la population
+
+## Analyse simple
+
+Plusieurs tableaux présenteront les données à l'admission en différenciant patients en première ligne ou en rechutes :
+
+1.  Caractéristiques démographiques des patients (âge, sexe\dots)
+2.  Variables médicales du patient
+    - Statut IgVH, mutation TP53
+    - Groupe âge 80-85, 85-90, >90
+    - Définiton FIT/ UNFIT selon CIRS et Clairance créatinémie <70ml/min
+    - Comobidités cardio-vasculaires/ insuffisance rénale
+    - Score qualité de vie
+    - CIRS
+    - score OMS
+
+## Qualité de vie
+
+La qualité de vie à l'admission sera étudiée sur les réponses au score EQ-5D. Selon la qualité des réponses l'évolution de ce score au fil du temps sera étudiée :
+
+ - note obtenue pour chacun des cinq dimensions (de 1 à 3)
+ - Note sur l'échelle visuelle (VAS) de 0 à 100.
+ 
+## Toxicité durée fixe versus traitement jusqu’à progression
+ 
+ - Arrêts précoces
+ - Interruption temporaire
+ - Réduction des doses
+ - Toxicité grade ¾
+ - Toxicité d’intérêt : cardio-vasculaires, infections, insuffisance rénale
+ 
+Les résultats bruts seront présentés. Si possible une comparaison entre les deux protocoles sera réalisée. Les courbes de survie (admission - Arrêt des traitements) seront réalisées. Si le nombre de cas le permet une comparaison (modèle de Cox) sera réalisée.  
+
+## Efficacité durée fixe versus traitement jusqu’à progression
+
+ - Réponse globale
+ - Survie sans progression
+ - Survie globale 
+
+Le taux de réponse sera présenté en nombre et pourcentage avec intervalle de confiance à 95 %. Les courbes de survie sans progression & de survie globale seront réalisées. Si le nombre de cas le permet une comparaison (modèle de Cox) sera réalisée.
+  
+## Groupe des patients en rechute
+
+ - Nombre de lignes de traitement
+ - Distribution des traitements en rechute en fonction des traitements reçus aux lignes antérieures  
+    
+La répartition des patients selon le nombre de lignes de traitement reçues sera présentée. La distribution des traitements sera présentée en tableau & par des diagrammes de flux si nombre de cas le permet.
+
+## Évolution des traitements et des types d’inhibiteurs de BTK dans le temps
+
+Un tableau préensera le nombre de cas année par année.
+
+# Analyse factorielle
+
+Une analyse factorielle en MCA (Analyse de correspondances multiples -- package `FactoMineR` [@facto]) sera réalisée afin d'essayer de mettre en évidence des groupes de patients.
+
+Cette analyse ne pourra être réalisée qu'après transformation des variables numériques en catégories & imputation des données manquantes ce qui n'est possible que si ces dernières ne sont pas trop nombreuses.
+
+
+# Technique {.unnumbered}
+
+L'analyse statistique sera réalisée avec le logiciel **R**[@rstat] & divers packages. Outre ceux cités dans le texte ou utilisera en particulier `tidyverse` [@tidy] & `baseph` [@baseph].
+
+Un dépôt GitHub sera utilisé qui ne comprendra que le code & non les données ou résultats. Au besoin un faux tableau de données sera présenté pour permettre des tests.
+
+<https://github.com/philippemichel/FOLLOW2>
+
+\printglossaries
+
+# Bibliographie {.unnumbered}

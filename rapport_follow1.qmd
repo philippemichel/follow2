@@ -1,0 +1,276 @@
+---
+subtitle: "Rapport statistique V0.1"
+---
+
+
+```{r}
+#| label: setup
+
+rm(list = ls())
+#
+library(baseph)
+library(tidyverse)
+library(gtsummary)
+library(kableExtra)
+library("forestmodel")
+library(labelled)
+library(epiDisplay)
+library(visdat)
+library(corrplot)
+library(biostats)
+library("colorspace")
+library("apyramid")
+library("FactoMineR")
+library("factoextra")
+library("missMDA")
+library("readODS")
+library("ggsci")
+library("survival")
+library("survminer")
+#
+theme_gtsummary_language(language = "fr", decimal.mark = ",")
+options(OutDec = ",")
+#
+load("datas/follow.RData")
+expx <- FALSE
+classeur <- "follow11.ods"
+# if (exp){system(paste0("rm -f ",classeur))}
+#
+theme_gtsummary_language(language = "fr", decimal.mark = ",")
+# theme_gtsummary_journal(journal = "jama")
+options(OutDec = ",")
+ptest <- list(all_continuous() ~ "t.test", all_categorical() ~ "chisq.test")
+stt <- list(
+  all_continuous() ~ "{mean} ± {sd}",
+  all_categorical() ~ "{n}/{N} ({p}%)"
+)
+```
+
+\bigskip
+
+\begin{notebox}[Attention !]
+Pour toutes les variables binaire (oui/non), seul le code "`Oui`" est présenté dans la plupart des tableaux.
+\end{notebox}
+
+
+# Validation de la population
+
+Pour le patient 2068872 aucune donnée n'est remplie, il est donc exclu de l'analyse. 
+
+L'échantillon comporte `r nrow(tt)` cas.
+
+## Données manquantes
+
+```{r}
+#| label: fig-manq
+#| fig-cap: Données manquantes
+#| fig-asp: 0.8
+
+vis_dat(tt[,6:33])
+```
+
+les données concernant la créatinine sont très mal remplies. 
+
+# Description de la population
+
+```{r}
+#|  label: constants
+
+tt <- tt |> 
+  janitor::remove_constant()
+```
+
+
+# Critère principal 
+
+## Traitement initial
+
+```{r}
+#| label: tbl-desc
+#| tbl-cap: Traitement initial
+
+tt |> 
+  dplyr::select(sex:any_other_comorbidity,tt_initial) |> 
+  mutate(performance_status_ecog = fct_recode(performance_status_ecog,
+    "0, 1, 2" = "0",
+    "0, 1, 2" = "1",
+    "0, 1, 2" = "2"
+  )) |>
+  dplyr::select(!starts_with("date")) |>  
+ tbl_summary(missing = "no",
+             by = tt_initial,
+              statistic = stt,
+              sort = all_categorical() ~ "frequency") |> 
+   bold_labels() |> 
+  add_overall(col_label = "**Total**  \nN = {style_number(N)}",) |> 
+  add_p(test = ptest) |>
+  bold_p() |>
+   modify_header(label ~ " ") |>
+  pexptabph(exp = expx, nomfich = classeur , nomsheet = "desc1", lg = TRUE) 
+```
+
+
+```{r}
+#| label: fig-pyr
+#| fig-cap:  Age Structure
+
+tt |> 
+apyramid::age_pyramid(agec, sex,
+                      show_midpoint = FALSE) +  
+    labs(
+    title = "Age Structure",
+    x = "years"
+  ) +
+  theme_light() +
+  scale_fill_manual(values = c("pink", "lightblue")) +
+  scale_y_continuous(labels = c("Female","Male"), breaks = c(-30,30)) +
+  theme(
+    plot.title = element_text(size = 14, face = "bold"),
+    plot.subtitle = element_text(size = 12),
+    axis.title.x = element_text(size = 12),
+    axis.title.y = element_text(size = 12),
+    axis.text.x = element_text(size = 12),
+    axis.text.y = element_text(size = 12),
+    legend.position = "none"
+  )
+```
+
+## Analyse en régression
+
+Analyse multivariée en régression linéaire. 
+On prend en compte tous les facteurs ayant une p-value < 0,2 en analyse simple. 
+
+```{r}
+#| label: tbl-princ1multi
+#| tbl-cap: Traitement initial - régression
+ttn <- tt |> 
+    mutate(performance_status_ecog = fct_recode(performance_status_ecog,
+    "0, 1, 2" = "0",
+    "0, 1, 2" = "1",
+    "0, 1, 2" = "2"
+  ))
+
+glm(tt_initial ~ age + performance_status_ecog + 
+           tp53_status + chronic_obstructive_pulmonary_disease,
+         data = ttn,
+         family = "binomial") |> 
+  tbl_regression(exponentiate = TRUE) |> 
+     bold_labels() |> 
+  bold_p() |>
+   modify_header(label ~ " ") |>
+  pexptabph(exp = expx, nomfich = classeur , nomsheet = "desc1", lg = TRUE) 
+
+```
+
+Seuls l'âge et le statut TP53 semblent avoir un effet sur le choix du traitement initial.
+
+
+## Analyse factorielle
+
+\begin{notebox}[Attention !]
+L'analyse factorielle est uniquement descriptive.
+\end{notebox}
+
+
+les scores CIRS & ECOG ainsi que le statut IGVH n'ont été renseignés que pour un patient sur deux & ne sont donc pas utilisables. 
+
+```{r}
+#| label: facto_prepa
+
+ttn <- tt |> 
+  dplyr::select(sex,
+                initial_diagnosis:performance_status_ecog,
+                tp53_status:renal_failure, any_other_comorbidity,tt_initial
+) |> 
+  dplyr::select(!starts_with("date")) |> 
+    mutate(performance_status_ecog = fct_recode(performance_status_ecog,
+    "0, 1, 2" = "0",
+    "0, 1, 2" = "1",
+    "0, 1, 2" = "2"
+  ))
+
+#nn <- estim_ncp(ttn)
+tta <- imputeMCA(ttn, ncp = 0)
+ttn <- tta$completeObs
+
+rtt <- MCA(ttn, 
+           graph = FALSE)
+```
+
+```{r}
+#| label: fig-facto-var
+#| fig-cap: Variance expliquée par axe
+
+rtt |> 
+fviz_screeplot(addlabels = TRUE, ylim = c(0, 10))
+```
+
+Les graphiques suivants sont à interpréter avec prudence, les axes représentés n'expliquant que 17 % de la variance totale. 
+
+```{r}
+#| label: fig-factovar
+#| fig-cap: analyse factorielle (MCA) - variables
+
+fviz_mca_var(rtt,
+           repel = TRUE,
+           col.var = "cos2",
+            select.var = list(contrib = 20),
+           gradient.cols = c("#00AFBB", "#E7B800", "#FC4E07"),
+           ggtheme = theme_minimal()
+)
+```
+
+```{r}
+#| label: fig-factocasigvh
+#| fig-cap: analyse factorielle (MCA) - IGVH
+
+fviz_mca_ind(rtt,
+           repel = TRUE,
+           geom = "point",
+           habillage = "igvh_status",
+           ggtheme = theme_minimal()
+)
+```
+
+```{r}
+#| label: fig-factoecog
+#| fig-cap: analyse factorielle (MCA) - ECOG
+
+fviz_mca_ind(rtt,
+           repel = TRUE,
+           geom = "point",
+           habillage = "performance_status_ecog",
+           ggtheme = theme_minimal()
+)
+```
+
+Les principaux facteurs permettant de  distinguer les patients sont les
+cormobidités, les marqueurs immunitaires ne semblent pas discriminants. À noter
+que le traitement initial ne semble pas être un facteur discriminant. 
+
+# Rechutes
+
+```{r}
+#| label: prepa-rechute
+
+rech <- tt |> 
+  dplyr::select(starts_with("if_alive_disease")) |> 
+  mutate_all(~ ifelse(.x == "Relapse or progressive disease", 1, 0)) 
+
+rechn <- rech
+rechute <- rowSums(rech, na.rm = TRUE)
+
+rech[,1] = rowSums(rech[,1:1], na.rm =TRUE)
+rech[,2] = rowSums(rech[,1:2], na.rm =TRUE)
+rech[,3] = rowSums(rech[,2:3], na.rm =TRUE)
+rech[,4] = rowSums(rech[,3:4], na.rm =TRUE)
+rech[,5] = rowSums(rech[,4:5], na.rm =TRUE)
+rech[,6] = rowSums(rech[,5:6], na.rm =TRUE)
+rech[,7] = rowSums(rech[,6:7], na.rm =TRUE)
+rech[,8] = rowSums(rech[,7:8], na.rm =TRUE)
+rech <- rech |> 
+  mutate_all(~ ifelse(.x > 0, "Relapse", "No Relapse")) |> 
+  mutate(id = tt$patient) |> 
+  pivot_longer(cols = 1:8, names_to = "mois", values_to = "rechute")
+```
+
