@@ -1,5 +1,6 @@
 ---
 subtitle: "Rapport statistique V0.1"
+cache: false
 ---
 
 
@@ -32,14 +33,14 @@ theme_gtsummary_language(language = "fr", decimal.mark = ",")
 options(OutDec = ",")
 #
 load("datas/follow.RData")
-expx <- FALSE
-classeur <- "follow11.ods"
+expx <- TRUE
+classeur <- "follow2.ods"
 # if (exp){system(paste0("rm -f ",classeur))}
 #
 theme_gtsummary_language(language = "fr", decimal.mark = ",")
 # theme_gtsummary_journal(journal = "jama")
 options(OutDec = ",")
-ptest <- list(all_continuous() ~ "t.test", all_categorical() ~ "chisq.test")
+ptest <- list(all_continuous() ~ "t.test", all_categorical() ~ "fisher.test")
 stt <- list(
   all_continuous() ~ "{mean} ± {sd}",
   all_categorical() ~ "{n}/{N} ({p}%)"
@@ -52,6 +53,8 @@ stt <- list(
 Pour toutes les variables binaire (oui/non), seul le code "`Oui`" est présenté dans la plupart des tableaux.
 \end{notebox}
 
+Sont considérés comme `Traitement fixe` les patients ayant reçu un traitement 
+comportant du venetoclax et comme `Traitement variable` les autres.
 
 # Validation de la population
 
@@ -69,7 +72,9 @@ L'échantillon comporte `r nrow(tt)` cas.
 vis_dat(tt[,6:33])
 ```
 
-les données concernant la créatinine sont très mal remplies. 
+les données concernant la créatinine & les diverses estimations de la clearance sont très mal remplies. 
+
+
 
 # Description de la population
 
@@ -80,23 +85,91 @@ tt <- tt |>
   janitor::remove_constant()
 ```
 
+```{r}
+#| label: tbl-qualsuivi
+#| tbl-cap: Nombre de patients suivis
+
+tt |> 
+  dplyr::select(starts_with("patient_status")) |> 
+  mutate_all(~ as.factor(ifelse(!is.na(.x), "yes", "no"))) |> 
+  tbl_summary() |> 
+   bold_labels() |> 
+   modify_header(label ~ " ") |>
+  pexptabph(exp = expx, nomfich = classeur , nomsheet = "qualsuivi", lg = TRUE)
+```
+
+```{r}
+#| label: fig-qualsuivi
+#| fig-cap: Nombre de patients suivis
+
+aa <- tt |>
+  dplyr::select(starts_with("patient_status")) |> 
+  pivot_longer(cols = everything(), names_to = "month", values_to = "n") |>
+  mutate(month = as.factor(month)) |>
+  drop_na() 
+ zz <- aa |> 
+   group_by(month) |> 
+   summarise(n = n()) 
+ zz <-  rbind(zz, c("patient_status_m48", 0))  |> 
+   mutate(n = as.numeric(n)) 
+ 
+zz |> 
+mutate(month = paste0("M ", c("06",12,18,24,30,36,42,48))) |> 
+  ggplot() +
+  aes(x = month, y = n, fill = month )  +
+  geom_bar(stat = "identity") +
+ # scale_x_discrete(labels = c("M6", "M12", "M18", "M24", "M30", "M36", "M42", "M48")) +
+   theme_light() +
+  scale_fill_jama() +
+  labs(
+    title = "number of patients followed",
+    x = "Month",
+    y = "N"
+  ) +
+  theme(
+    plot.title = element_text(size = 14, face = "bold"),
+    plot.subtitle = element_text(size = 12),
+    axis.title.x = element_text(size = 12),
+    axis.title.y = element_text(size = 12),
+    axis.text.x = element_text(size = 12),
+    axis.text.y = element_text(size = 12),
+    legend.position = "none"
+  )
+
+```
+
+
+\begin{notebox}[Attention !]
+Il n'y a aucune donnée à M 48.
+\end{notebox}
 
 # Critère principal 
 
-## Traitement initial
+```{r}
+#| label: tbl-ttinit
+#| tbl-cap: Traitement initial
+
+tt |> 
+  dplyr::select(tt_initial) |> 
+  tbl_summary(sort = all_categorical() ~ "frequency") |> 
+  bold_labels() |>
+   modify_header(label ~ " ") |>
+  pexptabph(exp = expx, nomfich = classeur , nomsheet = "ttinit", lg = TRUE)
+
+```
+
+
+
+## Traitement initial & caractéristiques des patients
+
 
 ```{r}
 #| label: tbl-desc
 #| tbl-cap: Traitement initial
 
 tt |> 
-  dplyr::select(sex:any_other_comorbidity,tt_initial) |> 
-  mutate(performance_status_ecog = fct_recode(performance_status_ecog,
-    "0, 1, 2" = "0",
-    "0, 1, 2" = "1",
-    "0, 1, 2" = "2"
-  )) |>
-  dplyr::select(!starts_with("date")) |>  
+  dplyr::select(agec,tp53_status,igvh_status, cardio, renal_failure, 
+                performance_status_ecog, score_cirs,tt_initial) |> 
  tbl_summary(missing = "no",
              by = tt_initial,
               statistic = stt,
@@ -108,6 +181,8 @@ tt |>
    modify_header(label ~ " ") |>
   pexptabph(exp = expx, nomfich = classeur , nomsheet = "desc1", lg = TRUE) 
 ```
+
+La variable `Traitement initial` n'est pas renseignée pour trois patients.
 
 
 ```{r}
@@ -143,32 +218,26 @@ On prend en compte tous les facteurs ayant une p-value < 0,2 en analyse simple.
 ```{r}
 #| label: tbl-princ1multi
 #| tbl-cap: Traitement initial - régression
-ttn <- tt |> 
-    mutate(performance_status_ecog = fct_recode(performance_status_ecog,
-    "0, 1, 2" = "0",
-    "0, 1, 2" = "1",
-    "0, 1, 2" = "2"
-  ))
 
 glm(tt_initial ~ age + performance_status_ecog + 
-           tp53_status + chronic_obstructive_pulmonary_disease,
-         data = ttn,
+           tp53_status,
+         data = tt,
          family = "binomial") |> 
   tbl_regression(exponentiate = TRUE) |> 
      bold_labels() |> 
   bold_p() |>
    modify_header(label ~ " ") |>
-  pexptabph(exp = expx, nomfich = classeur , nomsheet = "desc1", lg = TRUE) 
+  pexptabph(exp = expx, nomfich = classeur , nomsheet = "desc2", lg = TRUE) 
 
 ```
 
-Seuls l'âge et le statut TP53 semblent avoir un effet sur le choix du traitement initial.
+Seuls l'âge et le statut TP53 semblent avoir un lien avec le traitement initial.
 
 
 ## Analyse factorielle
 
 \begin{notebox}[Attention !]
-L'analyse factorielle est uniquement descriptive.
+L'analyse factorielle est uniquement descriptive. Aucn tets n'est pratiqué. 
 \end{notebox}
 
 
@@ -250,68 +319,209 @@ que le traitement initial ne semble pas être un facteur discriminant.
 
 # Rechutes
 
+
+
 ```{r}
-#| label: prepa-rechute
+#| label: tbl-rechute
+#| tbl-cap: Traitement initial & rechute
+
 
 rech <- tt |> 
   dplyr::select(starts_with("if_alive_disease")) |> 
-  mutate_all(~ ifelse(.x == "Relapse or progressive disease", 1, 0)) 
-
-rechn <- rech
+  mutate_all(~ ifelse(.x == "Relapse or progressive disease", 1, 0)) |> 
+  mutate_all(~replace(., is.na(.), 0))
 rechute <- rowSums(rech, na.rm = TRUE)
-
-rech[,1] = rowSums(rech[,1:1], na.rm =TRUE)
-rech[,2] = rowSums(rech[,1:2], na.rm =TRUE)
-rech[,3] = rowSums(rech[,2:3], na.rm =TRUE)
-rech[,4] = rowSums(rech[,3:4], na.rm =TRUE)
-rech[,5] = rowSums(rech[,4:5], na.rm =TRUE)
-rech[,6] = rowSums(rech[,5:6], na.rm =TRUE)
-rech[,7] = rowSums(rech[,6:7], na.rm =TRUE)
-rech[,8] = rowSums(rech[,7:8], na.rm =TRUE)
-rech <- rech |> 
-  mutate_all(~ ifelse(.x > 0, "Relapse", "No Relapse")) |> 
-  mutate(id = tt$patient) |> 
-  mutate(tt_initial = tt$tt_initial) |>
-  pivot_longer(cols = 1:8, names_to = "mois", values_to = "rechute") |> 
-  mutate_all(as.factor)
-
-## Recodage de rech$mois en rech$mois_rec
-rech$mois <- rech$mois |>
-  fct_recode(
-    "M 12" = "if_alive_disease_status_m12",
-    "M18" = "if_alive_disease_status_m18",
-    "M 24" = "if_alive_disease_status_m24",
-    "M 30" = "if_alive_disease_status_m30",
-    "M 36" = "if_alive_disease_status_m36",
-    "M 42" = "if_alive_disease_status_m42",
-    "M 48" = "if_alive_disease_status_m48",
-    "M 6" = "if_alive_disease_status_m6"
-  )
-rech$mois <- rech$mois |>
-  fct_relevel(
-    "M 6", "M 12", "M18", "M 24", "M 30", "M 36", "M 42", "M 48"
-  )
-
-```
-
-```{r}
-#| label: tbl-rechutes1
-#| tbl-cap: Rechute en fonction du traitement initial
-
-tt$rechute <- as.factor(ifelse(rechute > 0, "Relapse", "No Relapse"))
-
+rechute <- as.factor(ifelse(rechute > 0, "Relapse", "No Relapse"))
 tt |> 
-  dplyr::select(tt_initial, rechute) |> 
-  tbl_summary(by = tt_initial,
-              statistic = stt,
-              sort = all_categorical() ~ "frequency") |> 
-  bold_labels() |> 
-  add_overall(col_label = "**Total**  \nN = {style_number(N)}",) |> 
-  add_p(test = ptest) |>
+  mutate(Relapse = rechute) |> 
+  dplyr::select(Relapse,tt_initial) |>
+  tbl_summary(by = tt_initial) |> 
+  add_p() |> 
+       bold_labels() |> 
   bold_p() |>
    modify_header(label ~ " ") |>
-  pexptabph(exp = expx, nomfich = classeur , nomsheet = "rechutes1", lg = TRUE)
+  pexptabph(exp = expx, nomfich = classeur , nomsheet = "rechutettinit", lg = TRUE) 
+```
+
+Sur ce petit échantillon le nombre de rechutes ne semble pas lié au traitement initial.
+
+# Analyse toxicité durée fixe versus traitement jusqu’à progression 
+
+## Diminution des doses
+
+```{r}
+#| label: tbl-diminution
+#| tbl-cap: Traitement initial & réduction des doses
+
+nmois = c("06", 12, 18, 24, 30, 36, 42, 48)
+
+
+
+tting <- tt |> 
+  dplyr::filter(if_alive_treatment_m06 == "treatment ongoing") |> 
+  dplyr::select(starts_with("if_treatment_ongoing_dosage_reduction")) |> 
+  mutate(across(everything(), ~ ifelse(.x == "yes", 1, 0))) |>
+  mutate_all(~replace(., is.na(.), 0)) 
+ rechute <- rowSums(tting, na.rm = TRUE) 
+ rechute <- as.factor(ifelse(rechute > 0, "yes", "no"))
+
+tt |> 
+   dplyr::filter(if_alive_treatment_m06 == "treatment ongoing") |> 
+  mutate(Dosage_reduction = rechute) |> 
+  dplyr::select(Dosage_reduction,tt_initial) |>
+  tbl_summary(by = tt_initial) |> 
+  add_p(test = ptest) |> 
+       bold_labels() |> 
+  bold_p() |>
+   modify_header(label ~ " ") |>
+  pexptabph(exp = expx, nomfich = classeur , nomsheet = "diminution", lg = TRUE) 
+  
+```
+
+Sur ce petit échantillon le nombre de patients ayant du avoir leurs doses diminuées ne semble pas lié au traitement initial.
+
+
+## Interruption temporaire du traitement
+
+```{r}
+#| label: tbl-stoptt
+#| tbl-cap: Interruption temporaire du traitement
+
+itemp <- NULL
+
+int <- as.factor(ifelse(tt$if_alive_treatment_m06 == "off treatment" &
+               tt$if_alive_treatment_m12 == "treatment ongoing", "yes", "no"))
+aa <- tibble(int, id = tt$tt_initial) |> 
+  dplyr::filter(int == "yes") 
+itemp <- rbind(itemp, aa)
+
+int <- as.factor(ifelse(tt$if_alive_treatment_m12 == "off treatment" &
+               tt$if_alive_treatment_m18 == "treatment ongoing", "yes", "no"))
+aa <- tibble(int, id = tt$tt_initial) |> 
+  dplyr::filter(int == "yes") 
+itemp <- rbind(itemp, aa)
+
+int <- as.factor(ifelse(tt$if_alive_treatment_m18 == "off treatment" &
+               tt$if_alive_treatment_m24 == "treatment ongoing", "yes", "no"))
+aa <- tibble(int, id = tt$tt_initial) |> 
+  dplyr::filter(int == "yes") 
+itemp <- rbind(itemp, aa)
+
+int <- as.factor(ifelse(tt$if_alive_treatment_m24 == "off treatment" &
+               tt$if_alive_treatment_m30 == "treatment ongoing", "yes", "no"))
+aa <- tibble(int, id = tt$tt_initial) |> 
+  dplyr::filter(int == "yes") 
+itemp <- rbind(itemp, aa)
+
+int <- as.factor(ifelse(tt$if_alive_treatment_m30== "off treatment" &
+               tt$if_alive_treatment_m36 == "treatment ongoing", "yes", "no"))
+aa <- tibble(int, id = tt$tt_initial) |> 
+  dplyr::filter(int == "yes") 
+itemp <- rbind(itemp, aa)
+
+int <- as.factor(ifelse(tt$if_alive_treatment_m36 == "off treatment" &
+               tt$if_alive_treatment_m42 == "treatment ongoing", "yes", "no"))
+aa <- tibble(int, id = tt$tt_initial) |> 
+  dplyr::filter(int == "yes") 
+itemp <- rbind(itemp, aa)
+
+
+aa <- tibble(int, id = tt$tt_initial) |> 
+  dplyr::filter(int == "yes") 
+itemp <- rbind(itemp, aa)
+
+itemp |> 
+  dplyr::select(id) |>
+  tbl_summary() |> 
+       bold_labels() |> 
+   modify_header(label ~ " ") |>
+  pexptabph(exp = expx, nomfich = classeur , nomsheet = "stoptt", lg = TRUE)
 
 ```
 
-Sur ce petit échantillon le nombre de rechute ne semble pas lié au traitement initial.
+À noter la dernière interruption temporaire a eu lieu à 24 mois.
+
+## Toxicité
+
+On compte les arrêts de traitement liés à la toxicité
+
+```{r}
+#| label: tbl-toxic
+#| tbl-cap: Toxicité
+
+tting <- tt |> 
+  dplyr::select(starts_with("if_off_treatment_reason_for_treatment_discontinuation")) |> 
+  mutate(across(everything(), ~ ifelse(.x == "toxicity", 1, 0))) |>
+  mutate_all(~replace(., is.na(.), 0))
+ rechute <- rowSums(tting, na.rm = TRUE) 
+ rechute <- as.factor(ifelse(rechute > 0, "yes", "no"))
+  
+tt |> 
+  mutate(toxicity = rechute) |> 
+  dplyr::select(toxicity,tt_initial) |>
+  tbl_summary(by = tt_initial) |> 
+  add_p(test = ptest) |> 
+       bold_labels() |> 
+  bold_p() |>
+   modify_header(label ~ " ") |>
+  pexptabph(exp = expx, nomfich = classeur , nomsheet = "toxicite", lg = TRUE) 
+  
+```
+
+# Courbes de survie
+
+
+```{r}
+#| label: prepa_courbes
+
+dates <- tt |> 
+  dplyr::select(starts_with("date_follow"),date_death) 
+
+dmax <-  apply(dates, 1, max, na.rm=TRUE)
+dmax <- ymd(dmax)
+suivi <- as.numeric(dmax - tt$date_inclusion_visite)/30.42
+dcd <- ifelse(is.na(tt$date_death), 1, 2)
+
+ttsurv <- Surv(suivi, dcd)
+
+```
+
+## Courbe globale
+
+```{r}
+#| label: fig-survie
+#| fig-cap: Courbe de survie globale
+#| #| fig-asp: 1
+
+fsurv <- survfit(ttsurv~1 , data = tt)
+ggsurvplot(fsurv,
+           palette = "jama",
+           risk.table = TRUE,
+           xlab = "Time in months",
+             font.x = c(5),
+           font.y = c(5),
+           )
+```
+
+## Courbe traitement initial
+
+```{r}
+#| label: fig-survie2
+#| fig-cap: Courbe de survie selon le traitement initial
+#| fig-asp: 1
+
+fsurv <- survfit(ttsurv~tt_initial , data = tt)
+ggsurvplot(fsurv,
+  palette = "jama",
+  conf.int = TRUE,  
+  pval = TRUE,           
+  risk.table = TRUE,
+  legend.labs = 
+    c("Fixed Duration", "Variable Duration"),
+  risk.table.height = 0.3,
+  xlab = "Time in months") 
+  
+```
+
+
+

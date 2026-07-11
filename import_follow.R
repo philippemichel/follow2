@@ -41,12 +41,23 @@ tt <- read_ods("datas/Extraction1.ods", sheet = 1, na = nn) |>
   mutate(tp53_status = fct_relevel(
     tp53_status,
     "unmutated", "mutated"
+  )) |>
+  mutate(performance_status_ecog = fct_recode(performance_status_ecog,
+    "0, 1, 2" = "0",
+    "0, 1, 2" = "1",
+    "0, 1, 2" = "2"
   ))
 
-# bn <- read_ods("datas/NAISSANCE.ods", sheet = 2, na = nn)
-# var_label(naiss) <- bn$nom
 
+cardio <- tt |>
+  dplyr::select(ischemic_heart_disease:valvulopathy) |>
+  mutate(across(everything(), ~ ifelse(.x == "yes", 1, 0))) |>
+  mutate(cardio = rowSums(across(everything()))) |>
+  mutate(cardio = as.factor(ifelse(cardio > 0, "yes", "no")))
 
+tt <- tt |>
+  mutate(cardio = cardio$cardio) |>
+  relocate(cardio, .after = "valvulopathy")
 #
 save(tt, file = "datas/follow.RData")
 load("datas/follow.RData")
