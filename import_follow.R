@@ -59,5 +59,56 @@ tt <- tt |>
   mutate(cardio = cardio$cardio) |>
   relocate(cardio, .after = "valvulopathy")
 #
+
+avant <- read_ods("datas/avant.ods", sheet = 1, na = nn) |>
+  clean_names() |>
+  mutate(across(is.character, as.factor)) |>
+  mutate(across(starts_with("date"), ymd)) |>
+  mutate(line = paste(line_1_tt, line_2_tt, line_3_tt, line_4_tt,
+    line_5_tt, line_6_tt, line_7_tt,
+    sep = " "
+  )) |>
+  mutate(venetoclax = ifelse(str_detect(line, "venetoclax"), "yes", "no")) |>
+  mutate(inhibitor = ifelse(str_detect(line, "tinib"), "yes", "no"))
+
+avant <-
+  avant |>
+  mutate(
+    status = case_when(
+      venetoclax == "yes" & inhibitor == "yes" ~ "venetoclax + BTK inhibitor",
+      venetoclax == "yes" ~ "venetoclax",
+      inhibitor == "yes" ~ "BTK inhibitor",
+      tt_ant == "yes" ~ "other treatment",
+      TRUE ~ "no"
+    )
+  ) |>
+  mutate(status = fct_relevel(
+    status,
+    "no", "venetoclax", "BTK inhibitor", "venetoclax + BTK inhibitor",
+    "other treatment"
+  ))
+
+
+av2 <- avant |>
+  dplyr::select(patient, tt_ant, nb_lines_ant, status) |>
+  mutate(status = as.factor(status)) |>
+  mutate(nb_lines_ant = as.factor(nb_lines_ant)) |>
+  mutate(rechute = ifelse(tt_ant == "yes", "Relapse", "First-line Treatment"))
+
+var_label(av2$tt_ant) <- "Previous Treatment"
+var_label(av2$nb_lines_ant) <- "Number of previous Treatment lines"
+var_label(av2$status) <- "Previous treatment"
+var_label(av2$rechute) <- "Relapse"
+var_label(av2$status) <- "Treatment status"
+var_label(tt$type_of_cll_treatment_1) <- "Initial Treatment Type"
+var_label(tt$tt_initial) <- "Initial Treatment"
+var_label(tt$tt_initial) <- "Initial  Type of Treatment"
+
+tt <- left_join(tt, av2, by = "patient")
+rm(avant, av2, cardio)
+
+
+#
 save(tt, file = "datas/follow.RData")
+rm(list = ls())
 load("datas/follow.RData")

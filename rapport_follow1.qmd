@@ -1,5 +1,5 @@
 ---
-subtitle: "Rapport statistique V0.1"
+subtitle: "Rapport statistique V1.0"
 cache: false
 ---
 
@@ -29,17 +29,11 @@ library("ggsci")
 library("survival")
 library("survminer")
 #
-theme_gtsummary_language(language = "fr", decimal.mark = ",")
-options(OutDec = ",")
-#
 load("datas/follow.RData")
-expx <- TRUE
+expx <- FALSE
 classeur <- "follow2.ods"
 # if (exp){system(paste0("rm -f ",classeur))}
 #
-theme_gtsummary_language(language = "fr", decimal.mark = ",")
-# theme_gtsummary_journal(journal = "jama")
-options(OutDec = ",")
 ptest <- list(all_continuous() ~ "t.test", all_categorical() ~ "fisher.test")
 stt <- list(
   all_continuous() ~ "{mean} ± {sd}",
@@ -58,6 +52,8 @@ comportant du venetoclax et comme `Traitement variable` les autres.
 
 # Validation de la population
 
+Le tableau sur le suivi des patient après    l'inclusion (20260630_Extraction FOLLOW.xlsx & celui sur le traitement initial (/home/philm/usrc/follow2/datas/reserve/20260715_Extraction Follow n°2_Lignes antérieures_Binet_Date diag_Richter.xlsx) ne prennent pas en compte exactement les mêmes patients. L'analyse se base sur les patients inclus avec suivi.
+
 Pour le patient 2068872 aucune donnée n'est remplie, il est donc exclu de l'analyse. 
 
 L'échantillon comporte `r nrow(tt)` cas.
@@ -66,10 +62,18 @@ L'échantillon comporte `r nrow(tt)` cas.
 
 ```{r}
 #| label: fig-manq
-#| fig-cap: Données manquantes
-#| fig-asp: 0.8
+#| fig-cap: missing data
+#| fig-asp: 1
 
-vis_dat(tt[,6:33])
+
+vis_dat(tt[,6:33],
+         sort_type = FALSE,
+          warn_large_data = FALSE) +
+  labs(title = "issing data") +
+    theme(
+    legend.position = "bottom",
+    axis.text.x = element_text(angle = 70, vjust =0, hjust=0)
+  )
 ```
 
 les données concernant la créatinine & les diverses estimations de la clearance sont très mal remplies. 
@@ -87,20 +91,21 @@ tt <- tt |>
 
 ```{r}
 #| label: tbl-qualsuivi
-#| tbl-cap: Nombre de patients suivis
+#| tbl-cap:  Number of patients followed
 
 tt |> 
   dplyr::select(starts_with("patient_status")) |> 
   mutate_all(~ as.factor(ifelse(!is.na(.x), "yes", "no"))) |> 
   tbl_summary() |> 
-   bold_labels() |> 
+   bold_labels() |>
+
    modify_header(label ~ " ") |>
   pexptabph(exp = expx, nomfich = classeur , nomsheet = "qualsuivi", lg = TRUE)
 ```
 
 ```{r}
 #| label: fig-qualsuivi
-#| fig-cap: Nombre de patients suivis
+#| fig-cap: Number of patients followed
 
 aa <- tt |>
   dplyr::select(starts_with("patient_status")) |> 
@@ -122,7 +127,7 @@ mutate(month = paste0("M ", c("06",12,18,24,30,36,42,48))) |>
    theme_light() +
   scale_fill_jama() +
   labs(
-    title = "number of patients followed",
+    title = "Number of patients followed",
     x = "Month",
     y = "N"
   ) +
@@ -143,119 +148,29 @@ mutate(month = paste0("M ", c("06",12,18,24,30,36,42,48))) |>
 Il n'y a aucune donnée à M 48.
 \end{notebox}
 
-# Critère principal 
-
-```{r}
-#| label: tbl-ttinit
-#| tbl-cap: Traitement initial
-
-tt |> 
-  dplyr::select(tt_initial) |> 
-  tbl_summary(sort = all_categorical() ~ "frequency") |> 
-  bold_labels() |>
-   modify_header(label ~ " ") |>
-  pexptabph(exp = expx, nomfich = classeur , nomsheet = "ttinit", lg = TRUE)
-
-```
-
-
-
-## Traitement initial & caractéristiques des patients
-
-
-```{r}
-#| label: tbl-desc
-#| tbl-cap: Traitement initial
-
-tt |> 
-  dplyr::select(agec,tp53_status,igvh_status, cardio, renal_failure, 
-                performance_status_ecog, score_cirs,tt_initial) |> 
- tbl_summary(missing = "no",
-             by = tt_initial,
-              statistic = stt,
-              sort = all_categorical() ~ "frequency") |> 
-   bold_labels() |> 
-  add_overall(col_label = "**Total**  \nN = {style_number(N)}",) |> 
-  add_p(test = ptest) |>
-  bold_p() |>
-   modify_header(label ~ " ") |>
-  pexptabph(exp = expx, nomfich = classeur , nomsheet = "desc1", lg = TRUE) 
-```
-
-La variable `Traitement initial` n'est pas renseignée pour trois patients.
-
-
-```{r}
-#| label: fig-pyr
-#| fig-cap:  Age Structure
-
-tt |> 
-apyramid::age_pyramid(agec, sex,
-                      show_midpoint = FALSE) +  
-    labs(
-    title = "Age Structure",
-    x = "years"
-  ) +
-  theme_light() +
-  scale_fill_manual(values = c("pink", "lightblue")) +
-  scale_y_continuous(labels = c("Female","Male"), breaks = c(-30,30)) +
-  theme(
-    plot.title = element_text(size = 14, face = "bold"),
-    plot.subtitle = element_text(size = 12),
-    axis.title.x = element_text(size = 12),
-    axis.title.y = element_text(size = 12),
-    axis.text.x = element_text(size = 12),
-    axis.text.y = element_text(size = 12),
-    legend.position = "none"
-  )
-```
-
-## Analyse en régression
-
-Analyse multivariée en régression linéaire. 
-On prend en compte tous les facteurs ayant une p-value < 0,2 en analyse simple. 
-
-```{r}
-#| label: tbl-princ1multi
-#| tbl-cap: Traitement initial - régression
-
-glm(tt_initial ~ age + performance_status_ecog + 
-           tp53_status,
-         data = tt,
-         family = "binomial") |> 
-  tbl_regression(exponentiate = TRUE) |> 
-     bold_labels() |> 
-  bold_p() |>
-   modify_header(label ~ " ") |>
-  pexptabph(exp = expx, nomfich = classeur , nomsheet = "desc2", lg = TRUE) 
-
-```
-
-Seuls l'âge et le statut TP53 semblent avoir un lien avec le traitement initial.
-
 
 ## Analyse factorielle
 
 \begin{notebox}[Attention !]
-L'analyse factorielle est uniquement descriptive. Aucn tets n'est pratiqué. 
+L'analyse factorielle est uniquement descriptive. Aucun test n'est pratiqué. 
 \end{notebox}
 
 
-les scores CIRS & ECOG ainsi que le statut IGVH n'ont été renseignés que pour un patient sur deux & ne sont donc pas utilisables. 
+les scores CIRS & ECOG ainsi que le status IGVH n'ont été renseignés que pour un patient sur deux & ne sont donc pas utilisables. 
 
 ```{r}
 #| label: facto_prepa
 
 ttn <- tt |> 
   dplyr::select(sex,
-                initial_diagnosis:performance_status_ecog,
-                tp53_status:renal_failure, any_other_comorbidity,tt_initial
+                initial_diagnosis:performance_status_ecog, rechute,
+                tp53_status:igvh_status,cardio: renal_failure,
+                any_other_comorbidity,type_tt_init
 ) |> 
   dplyr::select(!starts_with("date")) |> 
     mutate(performance_status_ecog = fct_recode(performance_status_ecog,
-    "0, 1, 2" = "0",
-    "0, 1, 2" = "1",
-    "0, 1, 2" = "2"
+    "ECOG 3" = "3",
+    "ECOG 0 - 2" = "0, 1, 2"
   ))
 
 #nn <- estim_ncp(ttn)
@@ -274,7 +189,8 @@ rtt |>
 fviz_screeplot(addlabels = TRUE, ylim = c(0, 10))
 ```
 
-Les graphiques suivants sont à interpréter avec prudence, les axes représentés n'expliquant que 17 % de la variance totale. 
+Les graphiques suivants sont à interpréter avec prudence, les axes
+représentés n'expliquant que 17 % de la variance totale. 
 
 ```{r}
 #| label: fig-factovar
@@ -314,16 +230,200 @@ fviz_mca_ind(rtt,
 ```
 
 Les principaux facteurs permettant de  distinguer les patients sont les
-cormobidités, les marqueurs immunitaires ne semblent pas discriminants. À noter
+cormobidités & le score ECOG, les marqueurs immunitaires ne semblent pas discriminants. À noter
 que le traitement initial ne semble pas être un facteur discriminant. 
 
-# Rechutes
+
+# Avant l'inclusion
+
+```{r}
+#| label: tbl-ant1
+#| tbl-cap: Treatments before inclusion
+
+tt |> 
+  dplyr::select(tt_ant) |>
+  tbl_summary(missing = "no",
+              statistic = stt,
+              sort = all_categorical() ~ "frequency") |> 
+   bold_labels() |> 
+     modify_header(label ~ " ") |>
+  pexptabph(exp = expx, nomfich = classeur , nomsheet = "ant1", lg = TRUE)
+```
+
+```{r}
+#| label: tbl-ant2
+#| tbl-cap: Treatments before inclusion - Patient characteristics
+
+tt |> 
+  dplyr::filter(tt_ant == "yes") |>
+  mutate(status = factor(status)) |>
+  dplyr::select(nb_lines_ant, status) |>
+  tbl_summary(missing = "no",
+              statistic = stt,
+              sort = all_categorical() ~ "frequency") |> 
+   bold_labels() |>
+       modify_header(label ~ " ") |>
+  pexptabph(exp = expx, nomfich = classeur , nomsheet = "ant2", lg = TRUE)
+```
+
+
+
+# Critère principal 
+
+```{r}
+#| label: tbl-ttinit
+#| tbl-cap: Initial Treatment
+
+tt |> 
+  dplyr::select(tt_initial) |> 
+  tbl_summary(sort = all_categorical() ~ "frequency") |> 
+  bold_labels() |>
+   modify_header(label ~ " ") |>
+  pexptabph(exp = expx, nomfich = classeur , nomsheet = "ttinit", lg = TRUE)
+
+```
+
+```{r}
+#| label: tbl-ttinit2
+#| tbl-cap: Initial Type of Treatment
+
+ tt |> 
+    mutate(venetoclax = ifelse(str_detect(type_of_cll_treatment_1,
+                                          "venetoclax"), "yes", "no")) |>
+  mutate(inhibitor = ifelse(str_detect(type_of_cll_treatment_1, "tinib"),
+                            "yes", "no")) |> 
+  mutate(
+    type_tt_init = case_when(
+      venetoclax == "yes" & inhibitor == "yes" ~ "venetoclax + BTK inhibitor",
+      inhibitor == "yes" ~ "BTK inhibitor",
+      venetoclax == "yes" ~ "venetoclax",
+      TRUE ~ "Other treatment")
+    )|> 
+    mutate(type_tt_init = fct_relevel(
+    type_tt_init,
+    "venetoclax", "BTK inhibitor", "venetoclax + BTK inhibitor",
+    "Other treatment"
+  )) |> 
+  dplyr::select(type_tt_init) |> 
+tbl_summary(
+              statistic = stt) |> 
+   bold_labels() |>
+       modify_header(label ~ " ") |>
+  pexptabph(exp = expx, nomfich = classeur , nomsheet = "ttinit2", lg = TRUE)
+```
+
+## Population entière
+
+### Traitement initial & caractéristiques des patients
+
+
+```{r}
+#| label: prepa-init
+
+tt <-   tt |> 
+    mutate(venetoclax = ifelse(str_detect(type_of_cll_treatment_1,
+                                          "venetoclax"), "yes", "no")) |>
+  mutate(inhibitor = ifelse(str_detect(type_of_cll_treatment_1, "tinib"),
+                            "yes", "no")) |> 
+  mutate(
+    type_tt_init = case_when(
+      inhibitor == "yes" ~ "BTK inhibitor",
+      venetoclax == "yes" ~ "venetoclax",
+      TRUE ~ "Other treatment")) |> 
+    mutate(type_tt_init = fct_relevel(
+    type_tt_init,
+    "venetoclax", "BTK inhibitor",
+    "Other treatment"
+  )) 
+  
+```
+  
+```{r}
+#| label: tbl-desc
+#| tbl-cap: Initial Treatment
+
+  tt |> 
+  dplyr::select(agec,tp53_status,igvh_status, cardio, renal_failure, 
+                performance_status_ecog, score_cirs, rechute, nb_lines_ant, status,type_tt_init) |> 
+ tbl_summary(missing = "no",
+             by = type_tt_init,
+              statistic = stt,
+              sort = all_categorical() ~ "frequency") |> 
+   bold_labels() |> 
+  add_overall(col_label = "**Total**  \nN = {style_number(N)}",) |> 
+  add_p() |>
+  bold_p() |>
+   modify_header(label ~ " ") |>
+  pexptabph(exp = expx, nomfich = classeur , nomsheet = "desc1", lg = TRUE) 
+```
+
+La variable `Traitement initial` n'est pas renseignée pour trois patients.
+
+J'ai essayé de rechercher un effet *centre* mais il y a trop de centres
+possibles pour avoir un résultat. 
+
+```{r}
+#| label: fig-pyr
+#| fig-cap:  Age Structure
+
+tt |> 
+apyramid::age_pyramid(agec, sex,
+                      show_midpoint = FALSE) +  
+    labs(
+    title = "Age Structure",
+    x = "years"
+  ) +
+  theme_light() +
+  scale_fill_manual(values = c("pink", "lightblue")) +
+  scale_y_continuous(labels = c("Female","Male"), breaks = c(-30,30)) +
+  theme(
+    plot.title = element_text(size = 14, face = "bold"),
+    plot.subtitle = element_text(size = 12),
+    axis.title.x = element_text(size = 12),
+    axis.title.y = element_text(size = 12),
+    axis.text.x = element_text(size = 12),
+    axis.text.y = element_text(size = 12),
+    legend.position = "none"
+  )
+```
+
+### Analyse en régression
+
+Analyse multivariée en régression linéaire ne prenant en compte que
+les  patients ayant reçu  venetoclax ou un BTK inhibitor en première
+ligne.
+
+On prend en compte tous les facteurs ayant une p-value < 0,2 en analyse
+simple. Les effectifs pour le score ECOG ne sont assez importants pour pouvoir être pris en compte.
+
+```{r}
+#| label: tbl-princ1multi
+#| tbl-cap: Initial Treatment - Regression
+
+zz <- tt |> 
+  dplyr::filter(type_tt_init != "Other treatment") 
+
+glm(tt_initial ~ age +  
+           tp53_status + status,
+         data = zz,
+         family = "binomial") |> 
+  tbl_regression(exponentiate = TRUE) |> 
+     bold_labels() |> 
+  bold_p() |>
+   modify_header(label ~ " ") |>
+  pexptabph(exp = expx, nomfich = classeur , nomsheet = "desc2", lg = TRUE) 
+
+```
+
+L'âge et le status TP53 semblent avoir un lien avec le traitement initial. Les patients ayant été traités antérieurement par BTK inhibitor ou en rechute sont plus souvent traités par venetoclax en première ligne après l'inclusion.
+
+### Rechutes
 
 
 
 ```{r}
 #| label: tbl-rechute
-#| tbl-cap: Traitement initial & rechute
+#| tbl-cap: Initial Treatment and Relapse
 
 
 rech <- tt |> 
@@ -345,13 +445,12 @@ tt |>
 
 Sur ce petit échantillon le nombre de rechutes ne semble pas lié au traitement initial.
 
-# Analyse toxicité durée fixe versus traitement jusqu’à progression 
 
-## Diminution des doses
+### Diminution des doses
 
 ```{r}
 #| label: tbl-diminution
-#| tbl-cap: Traitement initial & réduction des doses
+#| tbl-cap: Initial Treatment & Dose reduction
 
 nmois = c("06", 12, 18, 24, 30, 36, 42, 48)
 
@@ -381,11 +480,12 @@ tt |>
 Sur ce petit échantillon le nombre de patients ayant du avoir leurs doses diminuées ne semble pas lié au traitement initial.
 
 
-## Interruption temporaire du traitement
+### Interruption temporaire du traitement
+
 
 ```{r}
 #| label: tbl-stoptt
-#| tbl-cap: Interruption temporaire du traitement
+#| tbl-cap: Temporary interruption of treatment
 
 itemp <- NULL
 
@@ -441,13 +541,13 @@ itemp |>
 
 À noter la dernière interruption temporaire a eu lieu à 24 mois.
 
-## Toxicité
+### Toxicité
 
 On compte les arrêts de traitement liés à la toxicité
 
 ```{r}
 #| label: tbl-toxic
-#| tbl-cap: Toxicité
+#| tbl-cap: Toxicity
 
 tting <- tt |> 
   dplyr::select(starts_with("if_off_treatment_reason_for_treatment_discontinuation")) |> 
@@ -468,7 +568,55 @@ tt |>
   
 ```
 
+# première ligne vs rechute
+
+## Choix du traitement initial
+
+```{r}
+#| label: tbl-rech-choix
+#| tbl-cap: Choix du traitement initial
+
+tt |> 
+  dplyr::select(rechute, type_tt_init) |>
+  tbl_summary(by = rechute, 
+              percent = "row") |> 
+  add_p(test = ptest) |> 
+       bold_labels() |> 
+  bold_p() |>
+   modify_header(label ~ " ") |>
+  pexptabph(exp = expx, nomfich = classeur , nomsheet = "rech-choix", lg = TRUE) 
+```
+
+Pas de différence significative pour le choix du traitement entre première ligne & rechute. 
+
+## Population
+
+  
+```{r}
+#| label: tbl-rech-popu
+#| tbl-cap:  Population characteristics according to Relapse
+
+  tt |> 
+  dplyr::select(agec,tp53_status,igvh_status, cardio, renal_failure, 
+       performance_status_ecog, score_cirs, rechute,type_tt_init) |> 
+ tbl_summary(missing = "no",
+             by = rechute,
+             
+              statistic = stt,
+              sort = all_categorical() ~ "frequency") |> 
+   bold_labels() |> 
+  add_overall(col_label = "**Total**  \nN = {style_number(N)}",) |> 
+  add_p() |>
+  bold_p() |>
+   modify_header(label ~ " ") |>
+  pexptabph(exp = expx, nomfich = classeur , nomsheet = "ech-popu", lg = TRUE) 
+```
+
+Les patients en première ligne sont plus souvent porteurs de la mutation IGVH.
+
 # Courbes de survie
+
+'
 
 
 ```{r}
@@ -490,37 +638,57 @@ ttsurv <- Surv(suivi, dcd)
 
 ```{r}
 #| label: fig-survie
-#| fig-cap: Courbe de survie globale
-#| #| fig-asp: 1
+#| fig-cap: Overall survival curve
+#| fig-asp: 1
 
 fsurv <- survfit(ttsurv~1 , data = tt)
 ggsurvplot(fsurv,
            palette = "jama",
-           risk.table = TRUE,
+           risk.table = FALSE,
            xlab = "Time in months",
              font.x = c(5),
            font.y = c(5),
            )
 ```
 
-## Courbe traitement initial
+## Courbe rechute vs première ligne
 
 ```{r}
 #| label: fig-survie2
-#| fig-cap: Courbe de survie selon le traitement initial
+#| fig-cap: Survival curve according to Relapse or not
 #| fig-asp: 1
 
-fsurv <- survfit(ttsurv~tt_initial , data = tt)
+
 ggsurvplot(fsurv,
   palette = "jama",
   conf.int = TRUE,  
   pval = TRUE,           
   risk.table = TRUE,
   legend.labs = 
-    c("Fixed Duration", "Variable Duration"),
+    c("First-line treatment", "Relapse"),
   risk.table.height = 0.3,
   xlab = "Time in months") 
-  
+```
+
+
+## Courbe traitement initial
+
+```{r}
+#| label: fig-survie3
+#| fig-cap: Survival curve according to initial treatment
+#| fig-asp: 1
+
+fsurv <- survfit(ttsurv~type_tt_init , data = tt)
+ggsurvplot(fsurv,
+  palette = "jama",
+  conf.int = FALSE,  
+  surv.median.line = "h",
+  pval = TRUE,
+    legend.labs = 
+    c("Venetoclax", "BTK inhibitor", "Other treatment"),
+  risk.table = TRUE,
+  risk.table.height = 0.3,
+  xlab = "Time in months") 
 ```
 
 

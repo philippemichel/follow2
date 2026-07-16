@@ -1,5 +1,5 @@
 title: "FOLLOW80+"
-lang: fr
+lang: eg
 author:
   - name: "Dr Philippe MICHEL"
     affiliations:
@@ -36,7 +36,6 @@ lof: true
 lot: true
 fig-cap-location: bottom
 tbl-cap-location: top
-classoption: [french]
 papersize: a4
 editor: source
 bibliography: stat.bib
