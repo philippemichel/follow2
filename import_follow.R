@@ -88,6 +88,37 @@ avant <-
     "other treatment"
   ))
 
+tt <- tt |>
+  mutate(venetoclax = ifelse(str_detect(
+    type_of_cll_treatment_1,
+    "venetoclax"
+  ), "yes", "no")) |>
+  mutate(inhibitor = ifelse(str_detect(type_of_cll_treatment_1, "tinib"),
+    "yes", "no"
+  )) |>
+  mutate(
+    type_tt_init = case_when(
+      venetoclax == "yes" & inhibitor == "yes" ~ "venetoclax + BTK inhibitor",
+      inhibitor == "yes" ~ "BTK inhibitor",
+      venetoclax == "yes" ~ "venetoclax",
+      TRUE ~ "Other treatment"
+    )) |>
+  mutate(type_tt_init = fct_relevel(
+    type_tt_init,
+    "venetoclax", "BTK inhibitor", "venetoclax + BTK inhibitor",
+    "Other treatment"
+  ))
+
+tt$type_tt_init2 <- tt$type_tt_init |>
+  fct_recode(
+    "venetoclax" = "venetoclax + BTK inhibitor"
+  )
+
+
+
+
+tt <- tt |>
+  mutate(type_tt_init = zz$type_tt_init)
 
 av2 <- avant |>
   dplyr::select(patient, tt_ant, nb_lines_ant, status) |>
@@ -99,13 +130,13 @@ var_label(av2$tt_ant) <- "Previous Treatment"
 var_label(av2$nb_lines_ant) <- "Number of previous Treatment lines"
 var_label(av2$status) <- "Previous treatment"
 var_label(av2$rechute) <- "Relapse"
-var_label(av2$status) <- "Treatment status"
 var_label(tt$type_of_cll_treatment_1) <- "Initial Treatment Type"
 var_label(tt$tt_initial) <- "Initial Treatment"
-var_label(tt$tt_initial) <- "Initial  Type of Treatment"
+var_label(tt$type_tt_init) <- "Initial  Type of Treatment"
+var_label(tt$type_tt_init2) <- "Initial  Type of Treatment"
 
 tt <- left_join(tt, av2, by = "patient")
-rm(avant, av2, cardio)
+rm(avant, av2, cardio, zz)
 
 
 #
