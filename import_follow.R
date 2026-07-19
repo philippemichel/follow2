@@ -5,6 +5,7 @@
 #  Date : 2026-07-02
 #
 #  ------------------------------------------------------------------------
+rm(list = ls())
 
 library(baseph)
 library(janitor)
@@ -15,6 +16,21 @@ library(labelled)
 
 
 nn <- c("", " ", "NA", "K", "D", "not performed")
+
+fam <- function(x) {
+  zz <- as.character(str_to_lower(x, "en"))
+  fam2 <- as.factor(case_when(
+    str_detect(zz, "venetoclax") ~ "Venetoclax based",
+    str_detect(zz, "inib") ~ "BTKi",
+    is.na(zz) ~ NA,
+    TRUE ~ "Other"
+  ))
+
+  fam2 <-  fct_relevel(fam2,
+      "Other", "Venetoclax based", "BTKi"
+    )
+  return(fam2)
+}
 
 # Naissance
 
@@ -32,8 +48,6 @@ tt <- read_ods("datas/Extraction1.ods", sheet = 1, na = nn) |>
   )) |>
   dplyr::select(-c(month_of_birth, year_of_birth)) |>
   mutate(performance_status_ecog = as.factor(performance_status_ecog)) |>
-  mutate(tt_initial = as.factor(ifelse(str_sub(type_of_cll_treatment_1, 1, 10) ==
-    "venetoclax", "Durée fixe", "Durée variable"))) |>
   mutate(igvh_status = fct_relevel(
     igvh_status,
     "unmutated", "mutated"
@@ -67,58 +81,21 @@ avant <- read_ods("datas/avant.ods", sheet = 1, na = nn) |>
   mutate(line = paste(line_1_tt, line_2_tt, line_3_tt, line_4_tt,
     line_5_tt, line_6_tt, line_7_tt,
     sep = " "
-  )) |>
-  mutate(venetoclax = ifelse(str_detect(line, "venetoclax"), "yes", "no")) |>
-  mutate(inhibitor = ifelse(str_detect(line, "tinib"), "yes", "no"))
-
-avant <-
-  avant |>
-  mutate(
-    status = case_when(
-      venetoclax == "yes" & inhibitor == "yes" ~ "venetoclax + BTK inhibitor",
-      venetoclax == "yes" ~ "venetoclax",
-      inhibitor == "yes" ~ "BTK inhibitor",
-      tt_ant == "yes" ~ "other treatment",
-      TRUE ~ "no"
-    )
-  ) |>
-  mutate(status = fct_relevel(
-    status,
-    "no", "venetoclax", "BTK inhibitor", "venetoclax + BTK inhibitor",
-    "other treatment"
   ))
 
-tt <- tt |>
-  mutate(venetoclax = ifelse(str_detect(
-    type_of_cll_treatment_1,
-    "venetoclax"
-  ), "yes", "no")) |>
-  mutate(inhibitor = ifelse(str_detect(type_of_cll_treatment_1, "tinib"),
-    "yes", "no"
-  )) |>
-  mutate(
-    type_tt_init = case_when(
-      venetoclax == "yes" & inhibitor == "yes" ~ "venetoclax + BTK inhibitor",
-      inhibitor == "yes" ~ "BTK inhibitor",
-      venetoclax == "yes" ~ "venetoclax",
-      TRUE ~ "Other treatment"
-    )) |>
-  mutate(type_tt_init = fct_relevel(
-    type_tt_init,
-    "venetoclax", "BTK inhibitor", "venetoclax + BTK inhibitor",
-    "Other treatment"
-  ))
+fam2 <- fam(avant$line)
+avant <- mutate(avant, status = fam2)
+zz <- which(avant$tt_ant == "no" | avant$line == "NA NA NA NA NA NA NA")
+avant$status[zz] <- NA
 
-tt$type_tt_init2 <- tt$type_tt_init |>
-  fct_recode(
-    "venetoclax" = "venetoclax + BTK inhibitor"
+## Réordonnancement de avant$status
+avant$status <- avant$status |>
+  fct_relevel(
+    "Other", "Venetoclax based", "BTKi"
   )
 
+var_label(avant$status) <- "Family of treatment before inclusion"
 
-
-
-tt <- tt |>
-  mutate(type_tt_init = zz$type_tt_init)
 
 av2 <- avant |>
   dplyr::select(patient, tt_ant, nb_lines_ant, status) |>
@@ -126,17 +103,25 @@ av2 <- avant |>
   mutate(nb_lines_ant = as.factor(nb_lines_ant)) |>
   mutate(rechute = ifelse(tt_ant == "yes", "Relapse", "First-line Treatment"))
 
-var_label(av2$tt_ant) <- "Previous Treatment"
-var_label(av2$nb_lines_ant) <- "Number of previous Treatment lines"
-var_label(av2$status) <- "Previous treatment"
-var_label(av2$rechute) <- "Relapse"
-var_label(tt$type_of_cll_treatment_1) <- "Initial Treatment Type"
-var_label(tt$tt_initial) <- "Initial Treatment"
-var_label(tt$type_tt_init) <- "Initial  Type of Treatment"
-var_label(tt$type_tt_init2) <- "Initial  Type of Treatment"
 
 tt <- left_join(tt, av2, by = "patient")
-rm(avant, av2, cardio, zz)
+
+var_label(tt$tt_ant) <- "Previous Treatment"
+var_label(tt$nb_lines_ant) <- "Number of previous Treatment lines"
+var_label(tt$status) <- "Previous treatment"
+var_label(tt$rechute) <- "Relapse"
+var_label(tt$treatment_1) <- "Initial Treatment Type"
+var_label(tt$agec) <- "Age"
+var_label(tt$performance_status_ecog) <- "Performance Status ECOG"
+var_label(tt$igvh_status) <- "IGHV Status"
+var_label(tt$tp53_status) <- "TP53 Status"
+var_label(tt$cardio) <- "Cardiovascular Comorbidities"
+var_label(tt$score_cirs) <- "Score CIRS"
+
+
+fam2 <- fam(tt$treatment_1)
+tt <- mutate(tt, famille = fam2)
+var_label(tt$famille) <- "Family of initial treatment"
 
 
 #

@@ -1,5 +1,5 @@
 ---
-subtitle: "Rapport statistique V1.0"
+subtitle: "Rapport statistique V1.3"
 cache: false
 ---
 
@@ -31,7 +31,7 @@ library("survminer")
 #
 load("datas/follow.RData")
 expx <- TRUE
-classeur <- "follow2_1707.ods"
+classeur <- "follow_1907v3.ods"
 # if (exp){system(paste0("rm -f ",classeur))}
 #
 ptest <- list(all_continuous() ~ "t.test", all_categorical() ~ "chisq.test")
@@ -167,7 +167,7 @@ ttn <- tt |>
   dplyr::select(sex,
                 initial_diagnosis:performance_status_ecog, rechute,
                 tp53_status:igvh_status,cardio: renal_failure,
-                any_other_comorbidity,tt_initial
+                any_other_comorbidity,famille
 ) |> 
   dplyr::select(!starts_with("date")) |> 
     mutate(performance_status_ecog = fct_recode(performance_status_ecog,
@@ -272,77 +272,52 @@ tt |>
 
 # Critère principal 
 
+Les diverses molécules utilisées sont regroupées par familles selon la classification suivante : 
+
+
+
+
 ```{r}
-#| label: tbl-ttinit
-#| tbl-cap: Initial Treatment
+#| label: tbl-familles
+#| tbl-cap: Initial Teatment - Molecules by family vs relapse or first line
 
 tt |> 
-  dplyr::select(tt_initial) |> 
-  tbl_summary(sort = all_categorical() ~ "frequency") |> 
-  bold_labels() |>
-   modify_header(label ~ " ") |>
-  pexptabph(exp = expx, nomfich = classeur , nomsheet = "ttinit", lg = TRUE)
-
-```
-
-```{r}
-#| label: tbl-ttinit2
-#| tbl-cap: Initial Type of Treatment
-
- tt |> 
-  dplyr::select(type_tt_init) |> 
-tbl_summary(
-              statistic = stt) |> 
+  dplyr::select(famille, rechute) |> 
+  tbl_summary(sort = all_categorical() ~ "frequency", by = rechute) |> 
+  add_overall(col_label = "**Total**  \nN = {style_number(N)}",) |>
+  add_p(test = ptest) |>
+  bold_p() |>
    bold_labels() |>
        modify_header(label ~ " ") |>
-  pexptabph(exp = expx, nomfich = classeur , nomsheet = "ttinit2", lg = TRUE)
+  pexptabph(exp = expx, nomfich = classeur , nomsheet = "familles", lg = TRUE)
+
 ```
+
 
 ## Population entière
 
 ### Traitement initial & caractéristiques des patients
 
 
-```{r}
-#| label: prepa-init
-
-tt <-   tt |> 
-    mutate(venetoclax = ifelse(str_detect(type_of_cll_treatment_1,
-                                          "venetoclax"), "yes", "no")) |>
-  mutate(inhibitor = ifelse(str_detect(type_of_cll_treatment_1, "tinib"),
-                            "yes", "no")) |> 
-  mutate(
-    type_tt_init = case_when(
-      inhibitor == "yes" ~ "BTK inhibitor",
-      venetoclax == "yes" ~ "venetoclax",
-      TRUE ~ "Other treatment")) |> 
-    mutate(type_tt_init = fct_relevel(
-    type_tt_init,
-    "venetoclax", "BTK inhibitor",
-    "Other treatment"
-  )) 
-  
-```
   
 ```{r}
 #| label: tbl-desc
 #| tbl-cap: Initial Treatment
 
-  tt |> 
-  dplyr::filter(type_tt_init != "venetoclax + BTK inhibitor") |>
-  mutate(type_tt_init = factor(type_tt_init)) |>
-  dplyr::select(agec,tp53_status,igvh_status, cardio, renal_failure, 
-                performance_status_ecog, score_cirs, rechute, nb_lines_ant, status,type_tt_init) |> 
- tbl_summary(missing = "no",
-             by = type_tt_init,
-              statistic = stt,
-              sort = all_categorical() ~ "frequency") |> 
-   bold_labels() |> 
-  add_overall(col_label = "**Total**  \nN = {style_number(N)}",) |> 
-  add_p(test = ptest) |>
+tt |> 
+  dplyr::select(agec, tp53_status,igvh_status, cardio, renal_failure, 
+                performance_status_ecog, score_cirs, rechute, nb_lines_ant, status,famille) |> 
+  tbl_summary(
+    by = famille,
+    statistic = list(all_categorical() ~ "{n} ({p}%)"),
+    digits = all_categorical() ~ c(0, 1)
+  ) |> 
+  add_p(test =ptest) |> 
   bold_p() |>
-   modify_header(label ~ " ") |>
-  pexptabph(exp = expx, nomfich = classeur , nomsheet = "desc1", lg = TRUE) 
+   bold_labels() |>
+       modify_header(label ~ " ") |>
+  gexptabph(exp = expx, nomfich = classeur , nomsheet = "famillesfact")
+
 ```
 
 La variable `Traitement initial` n'est pas renseignée pour trois patients.
@@ -375,11 +350,12 @@ apyramid::age_pyramid(agec, sex,
   )
 ```
 
+
 ### Analyse en régression
 
 Analyse multivariée en régression linéaire ne prenant en compte que
 les  patients ayant reçu  venetoclax ou un BTK inhibitor en première
-ligne.
+ligne : une régression sur plus de deux classe est techniquement possible mais très difficile à interpréter.
 
 On prend en compte tous les facteurs ayant une p-value < 0,2 en analyse
 simple. Les effectifs pour le score ECOG ne sont assez importants pour pouvoir être pris en compte.
@@ -389,9 +365,9 @@ simple. Les effectifs pour le score ECOG ne sont assez importants pour pouvoir �
 #| tbl-cap: Initial Treatment - Regression
 
 zz <- tt |> 
-  dplyr::filter(type_tt_init != "Other treatment") 
+  dplyr::filter(famille != "Other treatment") 
 
-glm(tt_initial ~ age +  
+glm(famille ~ age +  
            tp53_status + status,
          data = zz,
          family = "binomial") |> 
@@ -399,7 +375,7 @@ glm(tt_initial ~ age +
      bold_labels() |> 
   bold_p() |>
    modify_header(label ~ " ") |>
-  pexptabph(exp = expx, nomfich = classeur , nomsheet = "desc2", lg = TRUE) 
+  pexptabph(exp = expx, nomfich = classeur , nomsheet = "desc2", lg = FALSE) 
 
 ```
 
@@ -426,10 +402,11 @@ rechutx <- rowSums(rech, na.rm = TRUE)
 rechutx <- as.factor(ifelse(rechutx > 0, "Relapse", "No Relapse"))
 tt |> 
   mutate(Relapse = rechutx) |> 
-  dplyr::select(Relapse,tt_initial) |>
-  tbl_summary(by = tt_initial,
+  dplyr::select(Relapse,famille) |>
+  tbl_summary(by = Relapse,
+              missing = "no",
               percent = "column") |> 
-  add_p() |> 
+  add_p(test = ptest) |> 
        bold_labels() |> 
   bold_p() |>
    modify_header(label ~ " ") |>
@@ -459,8 +436,8 @@ tting <- tt |>
 tt |> 
    dplyr::filter(if_alive_treatment_m06 == "treatment ongoing") |> 
   mutate(Dosage_reduction = rechutx) |> 
-  dplyr::select(Dosage_reduction,tt_initial) |>
-  tbl_summary(by = tt_initial) |> 
+  dplyr::select(Dosage_reduction,famille) |>
+  tbl_summary(by = famille) |> 
   add_p(test = ptest) |> 
        bold_labels() |> 
   bold_p() |>
@@ -483,42 +460,42 @@ itemp <- NULL
 
 int <- as.factor(ifelse(tt$if_alive_treatment_m06 == "off treatment" &
                tt$if_alive_treatment_m12 == "treatment ongoing", "yes", "no"))
-aa <- tibble(int, id = tt$tt_initial) |> 
+aa <- tibble(int, id = tt$famille) |> 
   dplyr::filter(int == "yes") 
 itemp <- rbind(itemp, aa)
 
 int <- as.factor(ifelse(tt$if_alive_treatment_m12 == "off treatment" &
                tt$if_alive_treatment_m18 == "treatment ongoing", "yes", "no"))
-aa <- tibble(int, id = tt$tt_initial) |> 
+aa <- tibble(int, id = tt$famille) |> 
   dplyr::filter(int == "yes") 
 itemp <- rbind(itemp, aa)
 
 int <- as.factor(ifelse(tt$if_alive_treatment_m18 == "off treatment" &
                tt$if_alive_treatment_m24 == "treatment ongoing", "yes", "no"))
-aa <- tibble(int, id = tt$tt_initial) |> 
+aa <- tibble(int, id = tt$famille) |> 
   dplyr::filter(int == "yes") 
 itemp <- rbind(itemp, aa)
 
 int <- as.factor(ifelse(tt$if_alive_treatment_m24 == "off treatment" &
                tt$if_alive_treatment_m30 == "treatment ongoing", "yes", "no"))
-aa <- tibble(int, id = tt$tt_initial) |> 
+aa <- tibble(int, id = tt$famille) |> 
   dplyr::filter(int == "yes") 
 itemp <- rbind(itemp, aa)
 
 int <- as.factor(ifelse(tt$if_alive_treatment_m30== "off treatment" &
                tt$if_alive_treatment_m36 == "treatment ongoing", "yes", "no"))
-aa <- tibble(int, id = tt$tt_initial) |> 
+aa <- tibble(int, id = tt$famille) |> 
   dplyr::filter(int == "yes") 
 itemp <- rbind(itemp, aa)
 
 int <- as.factor(ifelse(tt$if_alive_treatment_m36 == "off treatment" &
                tt$if_alive_treatment_m42 == "treatment ongoing", "yes", "no"))
-aa <- tibble(int, id = tt$tt_initial) |> 
+aa <- tibble(int, id = tt$famille) |> 
   dplyr::filter(int == "yes") 
 itemp <- rbind(itemp, aa)
 
 
-aa <- tibble(int, id= tt$tt_initial) |> 
+aa <- tibble(int, id= tt$famille) |> 
   dplyr::filter(int == "yes") 
 itemp <- rbind(itemp, aa)
 
@@ -552,8 +529,8 @@ tting <- tt |>
   
 tt |> 
   mutate(toxicity = rechutx) |> 
-  dplyr::select(toxicity,tt_initial) |>
-  tbl_summary(by = tt_initial) |> 
+  dplyr::select(toxicity,famille) |>
+  tbl_summary(by = famille) |> 
   add_p(test = ptest) |> 
        bold_labels() |> 
   bold_p() |>
@@ -571,7 +548,7 @@ tt |>
 #| tbl-cap: Choix du traitement initial
 
 tt |> 
-  dplyr::select(rechute, type_tt_init) |>
+  dplyr::select(rechute, famille) |>
   tbl_summary(by = rechute, 
               percent = "column") |> 
   add_p(test = ptest) |> 
@@ -592,7 +569,7 @@ Pas de différence significative pour le choix du traitement entre première lig
 
   tt |> 
   dplyr::select(agec,tp53_status,igvh_status, cardio, renal_failure, 
-       performance_status_ecog, score_cirs, rechute,type_tt_init) |> 
+       performance_status_ecog, score_cirs, rechute,famille) |> 
  tbl_summary(missing = "no",
              by = rechute,
              
@@ -637,6 +614,8 @@ ttsurv <- Surv(suivi, dcd)
 #| fig-asp: 1
 
 fsurv <- survfit(ttsurv~1 , data = tt)
+medsurv <- meds(fsurv$time)
+
 ggsurvplot(fsurv,
            palette = "jama",
            risk.table = FALSE,
@@ -645,6 +624,8 @@ ggtheme=theme_minimal(),
            xlab = "Time in months"
            )
 ```
+
+La médiane de suivi est de `r medsurv` mois.
 
 ## Courbe rechute vs première ligne
 
@@ -675,14 +656,13 @@ ggsurvplot(fsurv,
 #| fig-cap: Survival curve according to initial treatment
 #| fig-asp: 1
 
-fsurv <- survfit(ttsurv~type_tt_init2 , data = tt)
+fsurv <- survfit(ttsurv~famille , data = tt)
 ggsurvplot(fsurv,
   palette = "jama",
   conf.int = FALSE,  
-  surv.median.line = "h",
+  surv.median.line = "hv",
   pval = TRUE,
-    legend.labs = 
-    c("Venetoclax", "BTK inhibitor", "Other treatment"),
+    legend.labs = levels(tt$famille),
   risk.table = TRUE,
   risk.table.height = 0.3,
   xlab = "Time in months") 
