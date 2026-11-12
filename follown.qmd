@@ -1,0 +1,225 @@
+---
+subtitle: "Rapport statistique V0.1"
+cache: false
+---
+
+
+```{r}
+#| label: setup
+
+rm(list = ls())
+#
+library("gtsummary")
+library("kableExtra")
+library("labelled")
+library("naniar")
+library("readODS")
+library("corrplot")
+library("biostats")
+library("colorspace")
+library("apyramid")
+ library("lme4")
+library("lmerTest")
+library("performance")
+library("baseph")
+library("tidyverse")
+
+load("datas/follow.RData")
+expx <- FALSE
+classeur <- "follow_n_v1.ods"
+#
+ptest <- list(all_continuous() ~ "t.test", all_categorical() ~ "chisq.test")
+stt <- list(
+  all_continuous() ~ "{mean} ± {sd}",
+  all_categorical() ~ "{n}/{N} ({p}%)"
+)
+#
+#
+theme_set(
+  theme_light() +
+    theme(
+      plot.title = element_text(size = 14, face = "bold"),
+      axis.title.x = element_blank(),
+      axis.title.y = element_text(size = 12),
+      axis.text = element_text(size = 12),
+      legend.position = "top",
+      legend.title = element_blank()
+    )
+)
+scale_fill_cav <- function(...) scale_fill_viridis_d(option = "plasma", begin = 0.4, ...)
+scale_colour_cav <- function(...) scale_colour_viridis_d(option = "plasma", begin = 0.4, end = 0.8, ...)
+```
+
+# Échantillon
+
+L'échantillon comporte `r nrow(tt)` cas pour `r ncol(tt)` variables utilisables : les variables vides ou constantes ont été supprimées ains que les "if\dots" comportant trop peu de réponses. 
+
+## Données manquantes
+
+La notion de $donnée manquante$ n'a de sens que pour les données à l'inclusion.  
+
+```{r}
+#| label: tbl-manq
+#| tbl-cap: Données manquantes
+
+tt |> 
+  dplyr::select(center:patient_receive_a_treatment,ecog:type_treatment_1) |>
+  dplyr::select(! starts_with("if")) |> 
+  dplyr::select(! opportunistic_infections) |> 
+  miss_var_summary() |> 
+  dplyr::slice(1:10)
+```
+
+
+
+# Description de la population
+
+```{r}
+#| label: tbl-demog
+#| tbl-cap: Données démographiques
+
+tt |> 
+  dplyr::select(sex:initial_diagnosis, ecog:score_cirs,tp53_status,igvh_status) |> 
+    tbl_summary(missing = "no") |> 
+  add_ci() |> 
+   modify_header(label = " ") |>
+  bold_labels() |> 
+  add_n() |> 
+  gexptabph(exp = expx, nomfich = classeur , nomsheet = "demog", lg = TRUE) |> 
+  
+
+```
+
+
+```{r}
+#| label: tbl-atcd
+#| tbl-cap: Antécédents
+#| 
+tt |> 
+  dplyr::select(ischemic_heart_disease:any_other_comorbidity) |> 
+  dplyr::select(! starts_with("if")) |> 
+    tbl_summary(missing = "no") |> 
+  add_ci() |> 
+   modify_header(label = " ") |>
+  bold_labels() |> 
+  add_n() |> 
+  gexptabph(exp = expx, nomfich = classeur , nomsheet = "demog", lg = TRUE)
+
+```
+
+
+
+
+```{r}
+#| label: tbl-nsuivi
+#| tbl-cap: Nombre de patients suivis
+
+zz <-  tt |> 
+  dplyr::select(c(date_treatment_1,starts_with("date_follow_up"))) |> 
+  pivot_longer(cols = everything()) |> 
+  mutate(name = str_sub(name,-3)) |> 
+  mutate(name = case_when(
+    name == "t_1" ~ "Inclusion",
+    TRUE ~ name  )) |> 
+  drop_na(value) 
+
+zz |> 
+  dplyr::select(name) |> 
+  tbl_summary() |> 
+  add_ci() |> 
+   modify_header(label = " ") |>
+  modify_spanning_header(all_stat_cols() ~ "**N (%)**") |>
+  bold_labels() |> 
+  gexptabph(exp = expx, nomfich = classeur , nomsheet = "nsuivi", lg = TRUE)
+```
+
+
+# Critère principal
+
+```{r}
+#| label: tbl-tt1
+#| tbl-cap: Traitement de première intention
+
+tt |> 
+  dplyr::select(tt1) |> 
+  tbl_summary() |> 
+  add_ci() |> 
+   modify_header(label = " ") |>
+  modify_spanning_header(all_stat_cols() ~ "**N (%)**") |>
+  bold_labels() |> 
+  gexptabph(exp = expx, nomfich = classeur , nomsheet = "tt1", lg = TRUE)
+```
+
+## Traitement initial vs population
+
+```{r}
+#| label: tbl-tt1demog
+#| tbl-cap: Traitement de première intention selon la population
+
+tt |> 
+  dplyr::select(tt1, sex, agec,initial_diagnosis,binet_stage_at_diagnosis, patient_receive_a_treatment) |> 
+  tbl_summary(by = tt1, 
+              missing = "no") |> 
+  add_p() |>
+  add_n() |> 
+   modify_header(label = " ") |>
+  modify_spanning_header(all_stat_cols() ~ "**N (%)**") |>
+  bold_labels() |> 
+  gexptabph(exp = expx, nomfich = classeur , nomsheet = "tt1demog", lg = TRUE)
+```
+
+
+## Traitement initial vs antécédents
+
+```{r}
+#| label: tbl-tt1atcd
+#| tbl-cap: Traitement de première intention selon la population
+
+tt |> 
+  dplyr::select(tt1, ecog:renal_failure,opportunistic_infections,
+                any_other_comorbidity) |> 
+  dplyr::select(! starts_with("if")) |> 
+  tbl_summary(by = tt1, 
+              missing = "no") |> 
+  add_p() |>
+  add_n() |> 
+   modify_header(label = " ") |>
+  modify_spanning_header(all_stat_cols() ~ "**N (%)**") |>
+  bold_labels() |> 
+  gexptabph(exp = expx, nomfich = classeur , nomsheet = "tt1atcd", lg = TRUE)
+```
+
+
+# Courbe de survie
+
+## Survie globale 
+
+```{r}
+#| label: fig-surv_glob
+#| fig-cap: Courbe de survie
+
+tt <- tt |> 
+  rowwise() |> 
+  mutate(dmax = max(c_across(starts_with("date_")), na.rm = TRUE)) |> 
+  ungroup() |> 
+  mutate(dcd = if_else(status_at_end_study == "Death", 1, 0, missing = 0)) |> 
+  mutate(suivi = as.numeric(dmax - date_inclusion)/30.5)
+dd <- Surv(time = tt$suivi, event = tt$dcd)
+ddt <- survfit(dd ~ tt$agec)
+ggsurvplot(
+  ddt,
+  data = tt,
+  risk.table = TRUE,
+  conf.int = TRUE,
+  xlab = "Time in months",
+  ylab = "Survival probability",
+  title = "Kaplan-Meier survival curve",
+  legend.title = "Survival curve",
+  risk.table.y.text.col = TRUE,
+  risk.table.y.text = FALSE
+)
+```
+
+
+
+

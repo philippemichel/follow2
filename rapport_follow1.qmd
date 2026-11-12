@@ -30,7 +30,7 @@ library("survival")
 library("survminer")
 #
 load("datas/follow.RData")
-expx <- TRUE
+expx <- FALSE
 classeur <- "follow_1907v3.ods"
 # if (exp){system(paste0("rm -f ",classeur))}
 #
@@ -395,9 +395,8 @@ après l'inclusion.
 
 
 rech <- tt |> 
-  dplyr::select(starts_with("if_alive_disease")) |> 
-  mutate_all(~ ifelse(.x == "Relapse or progressive disease", 1, 0)) |> 
-  mutate_all(~replace(., is.na(.), 0))
+  dplyr::select(starts_with("if_relapse")) |> 
+  mutate_all(~ ifelse(!is.na(.), 1, 0))
 rechutx <- rowSums(rech, na.rm = TRUE)
 rechutx <- as.factor(ifelse(rechutx > 0, "Relapse", "No Relapse"))
 tt |> 
@@ -620,7 +619,7 @@ ggsurvplot(fsurv,
            palette = "jama",
            risk.table = FALSE,
            surv.median.line = "h",
-ggtheme=theme_minimal(),
+ggtheme=theme_grey(),
            xlab = "Time in months"
            )
 ```
