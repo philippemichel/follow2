@@ -23,6 +23,8 @@ library("lmerTest")
 library("performance")
 library("baseph")
 library("tidyverse")
+library("survival")
+library("survminer")
 
 load("datas/follow.RData")
 expx <- FALSE
@@ -220,6 +222,39 @@ ggsurvplot(
 )
 ```
 
+```{r}
+#| label: fig-surv_rech
+#| fig-cap: Courbe de survie ou rechute
 
+tt <- tt |> 
+  rowwise() |> 
+  mutate(dmax = max(c_across(starts_with("date_")), na.rm = TRUE)) |> 
+  ungroup() |> 
+  mutate(dcd = if_else(status_at_end_study == "Death", 1, 0, missing = 0)) |> 
+  mutate(suivi = as.numeric(dmax - date_inclusion)/30.5) |> 
+   mutate(repl = paste0(if_relapse_date_m18, 
+                        if_relapse_date_m24, if_relapse_date_m36)) |> 
+  mutate(repl = stringr::str_replace_all(repl,"NA","")) |> 
+   mutate(dmax= ymd(str_sub(paste0(repl,dmax),1,10))) |> 
+  mutate(dcd = ifelse(repl >1 ,1, dcd))
+
+dd <- Surv(time = tt$suivi, event = tt$dcd)
+ddt <- survfit(dd ~ agec, data = tt)
+ggsurvplot(
+  ddt,
+  data = tt,
+  risk.table = TRUE,
+  conf.int = TRUE,
+  xlab = "Time in months",
+  ylab = "Survival probability",
+  title = "Survie sans rechute",
+  subtitle = "Kaplan-Meier survival curve",
+  risk.table.y.text.col = TRUE,
+  risk.table.y.text = FALSE, 
+  break.x.by = 6,
+  xlim = c(0, 40),
+  surv.median.line = "hv",
+) 
+```
 
 
