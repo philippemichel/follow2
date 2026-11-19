@@ -1,5 +1,5 @@
 ---
-subtitle: "Rapport statistique V0.1"
+subtitle: "Rapport statistique V0.2"
 cache: false
 ---
 
@@ -82,12 +82,12 @@ tt |>
 
 tt |> 
   dplyr::select(sex:initial_diagnosis, ecog:score_cirs,tp53_status,igvh_status) |> 
-    tbl_summary(missing = "no") |> 
+    tbl_summary(missing = "no",sort = all_categorical() ~ "frequency") |> 
   add_ci() |> 
    modify_header(label = " ") |>
   bold_labels() |> 
   add_n() |> 
-  gexptabph(exp = expx, nomfich = classeur , nomsheet = "demog", lg = TRUE) |> 
+  gexptabph(exp = expx, nomfich = classeur , nomsheet = "demog", lg = TRUE) 
   
 
 ```
@@ -100,7 +100,7 @@ tt |>
 tt |> 
   dplyr::select(ischemic_heart_disease:any_other_comorbidity) |> 
   dplyr::select(! starts_with("if")) |> 
-    tbl_summary(missing = "no") |> 
+    tbl_summary(missing = "no",sort = all_categorical() ~ "frequency") |> 
   add_ci() |> 
    modify_header(label = " ") |>
   bold_labels() |> 
@@ -117,32 +117,76 @@ tt |>
 #| tbl-cap: Nombre de patients suivis
 
 zz <-  tt |> 
-  dplyr::select(c(date_treatment_1,starts_with("date_follow_up"))) |> 
+  dplyr::select(starts_with("date_follow_up")) |> 
   pivot_longer(cols = everything()) |> 
+  mutate(across(everything(), as.factor)) |> 
   mutate(name = str_sub(name,-3)) |> 
-  mutate(name = case_when(
+  mutate(Month = case_when(
     name == "t_1" ~ "Inclusion",
     TRUE ~ name  )) |> 
-  drop_na(value) 
+  drop_na(value)
+   
 
 zz |> 
-  dplyr::select(name) |> 
-  tbl_summary() |> 
-  add_ci() |> 
+  dplyr::select(Month) |> 
+  tbl_summary(statistic = list( all_categorical() ~ "{n}")) |> 
    modify_header(label = " ") |>
-  modify_spanning_header(all_stat_cols() ~ "**N (%)**") |>
   bold_labels() |> 
   gexptabph(exp = expx, nomfich = classeur , nomsheet = "nsuivi", lg = TRUE)
 ```
 
+```{r}
+#| label: fig-nsuivi
+#| fig-cap: Nombre de patients suivis
+
+zz |> 
+  summarise(n = n(), .by = Month) |> 
+  ggplot(aes(x = Month, y = n)) +
+  geom_line(group = 1) +
+  geom_point(fill = "steelblue") +
+  labs(title = "Number of patients") 
+  
+  
+```
+
+
+
 
 # Critère principal
+
+
+## Première ligne ou non
+
+```{r}
+tt |> 
+  #| label: tbl-tt1lig
+#| tbl-cap: Traitement de première intention ou non
+#| 
+  dplyr::select(tt1,patient_receive_a_treatment) |>
+  tbl_summary(by = patient_receive_a_treatment) |> 
+  add_p()|> 
+  bold_p() |>
+  modify_header(label = "") |>
+  modify_spanning_header(all_stat_cols() ~ "**previous treatment**") |>
+  bold_labels() |> 
+    gexptabph(exp = expx, nomfich = classeur , nomsheet = "tt1lig", lg = TRUE)
+
+```
+
+```{r}
+#| label: prepaprem
+
+tti <- tt |> 
+  dplyr::filter(patient_receive_a_treatment == "no") 
+```
+
+On ne prend en compte que les patients en première ligne de traitement à l'inclusion soit `r nrow(tti)` patients.
 
 ```{r}
 #| label: tbl-tt1
 #| tbl-cap: Traitement de première intention
 
-tt |> 
+tti |> 
   dplyr::select(tt1) |> 
   tbl_summary() |> 
   add_ci() |> 
@@ -152,22 +196,27 @@ tt |>
   gexptabph(exp = expx, nomfich = classeur , nomsheet = "tt1", lg = TRUE)
 ```
 
+
+Un patient a reçu venetoclax & BTKi & a été classé en `venetoclax`.
+
 ## Traitement initial vs population
 
 ```{r}
 #| label: tbl-tt1demog
 #| tbl-cap: Traitement de première intention selon la population
 
-tt |> 
+tti |> 
   dplyr::select(tt1, sex, agec,initial_diagnosis,binet_stage_at_diagnosis, patient_receive_a_treatment) |> 
   tbl_summary(by = tt1, 
-              missing = "no") |> 
+              missing = "no",sort = all_categorical() ~ "frequency", 
+              percent = "row") |>
   add_p() |>
   add_n() |> 
+  bold_p() |>
    modify_header(label = " ") |>
   modify_spanning_header(all_stat_cols() ~ "**N (%)**") |>
   bold_labels() |> 
-  gexptabph(exp = expx, nomfich = classeur , nomsheet = "tt1demog", lg = TRUE)
+  gexptabph(exp = expx, nomfich = classeur , nomsheet = "tt1demog", lg = FALSE)
 ```
 
 
@@ -177,18 +226,67 @@ tt |>
 #| label: tbl-tt1atcd
 #| tbl-cap: Traitement de première intention selon la population
 
-tt |> 
+tti |> 
   dplyr::select(tt1, ecog:renal_failure,opportunistic_infections,
                 any_other_comorbidity) |> 
   dplyr::select(! starts_with("if")) |> 
   tbl_summary(by = tt1, 
-              missing = "no") |> 
+              missing = "no",sort = all_categorical() ~ "frequency",
+              percent = "row") |> 
   add_p() |>
   add_n() |> 
+    bold_p() |>
    modify_header(label = " ") |>
   modify_spanning_header(all_stat_cols() ~ "**N (%)**") |>
   bold_labels() |> 
   gexptabph(exp = expx, nomfich = classeur , nomsheet = "tt1atcd", lg = TRUE)
+```
+
+
+
+
+# Avant l'inclusion
+
+
+```{r}
+#| label: tbl-ttav1
+#| tbl-cap: Lignes de traitement avant l'inclusion
+
+tt |> 
+  dplyr::select(patient_receive_a_treatment,if_yes_number_lines_before) |> 
+  tbl_summary( missing = "no",sort = all_categorical() ~ "frequency") |> 
+  add_n() |> 
+   modify_header(label = " ") |>
+  bold_labels() |> 
+  gexptabph(exp = expx, nomfich = classeur,
+            nomsheet = "ttav1", lg = TRUE)
+```
+
+```{r}
+#| label: tbl-ttav2
+#| tbl-cap: Type de traitement reçu avant l'inclusion
+
+typ <- tibble(ttant =c(tt$type_1_line_therapy,tt$type_2_line_therapy,
+         tt$type_3_line_therapy,tt$type_4_line_therapy,
+         tt$type_5_line_therapy,tt$type_6_line_therapy,
+         tt$type_7_line_therapy
+         ))
+typ <- typ |>  
+  drop_na() |> 
+mutate(ttant =  
+case_when(
+  str_detect(ttant, "venetocl") ~ "venetoclax",
+  str_detect(ttant, "inib") ~ "BTKi",
+  TRUE ~ "Other"
+))
+
+typ |> 
+  tbl_summary( missing = "no",
+               sort = all_categorical() ~ "frequency") |> 
+  add_n() |> 
+   modify_header(label = " ") |>
+  bold_labels() |> 
+  gexptabph(exp = expx, nomfich = classeur , nomsheet = "tt1av2", lg = TRUE)
 ```
 
 
@@ -239,12 +337,15 @@ tt <- tt |>
   mutate(dcd = ifelse(repl >1 ,1, dcd))
 
 dd <- Surv(time = tt$suivi, event = tt$dcd)
-ddt <- survfit(dd ~ agec, data = tt)
+ddt <- survfit(dd ~ tt1 + agec, data = tt)
 ggsurvplot(
   ddt,
   data = tt,
   risk.table = TRUE,
-  conf.int = TRUE,
+  conf.int = FALSE,
+  pval = TRUE,
+  pval.method = TRUE,
+  palette = "jco",
   xlab = "Time in months",
   ylab = "Survival probability",
   title = "Survie sans rechute",
@@ -254,7 +355,66 @@ ggsurvplot(
   break.x.by = 6,
   xlim = c(0, 40),
   surv.median.line = "hv",
+  legend.title = "Âge",
+  #legend.labs = c("80-84", "85-89","=>90")
 ) 
 ```
 
+# Rechutes 
 
+```{r}
+#| label: rechute
+#| tbl-cap: Rechutes
+
+tt |> 
+  dplyr::select(starts_with("if_alive_disease_Status")) |>
+  pivot_longer(cols = everything(), names_to =  "Month",
+values_to = "Status") |> 
+  mutate(Status = as.factor(Status)) |>
+  drop_na(Status) |>
+  mutate(Month =   fct_recode(Month,
+    "M6" = "if_alive_disease_status_m06",
+    "M12" = "if_alive_disease_status_m12",
+    "M18" = "if_alive_disease_status_m18",
+    "M24" = "if_alive_disease_status_m24",
+    "M30" = "if_alive_disease_status_m30",
+    "M36" = "if_alive_disease_status_m36",
+    "M42" = "if_alive_disease_status_m42"
+  )) |> 
+  tbl_cross(row = Month, col = Status, 
+            percent = "row",
+            margin = NULL) |> 
+    bold_labels() |> 
+ gexptabph(exp = expx, nomfich = classeur,
+            nomsheet = "rechute", lg = TRUE)
+```
+
+# Réduction de dose
+
+```{r}
+#| label: reduction
+#| tbl-cap: Réduction de doses
+
+tt |> 
+  dplyr::select(starts_with("if_treatment_ongoing_dosage_reduction")) |>
+  pivot_longer(cols = everything(), names_to = "variable",
+               values_to = "Dose reduction") |>
+  mutate(`Dose reduction` = as.factor(`Dose reduction`)) |>
+  drop_na(`Dose reduction`) |>
+  mutate(Month =   fct_recode(variable,
+    "M6" = "if_treatment_ongoing_dosage_reduction_m06",
+    "M12" = "if_treatment_ongoing_dosage_reduction_m12",
+    "M18" = "if_treatment_ongoing_dosage_reduction_m18",
+    "M24" = "if_treatment_ongoing_dosage_reduction_m24",
+    "M30" = "if_treatment_ongoing_dosage_reduction_m30",
+    "M36" = "if_treatment_ongoing_dosage_reduction_m36",
+    "M42" = "if_treatment_ongoing_dosage_reduction_m42",
+    "M48" = "if_treatment_ongoing_dosage_reduction_m48"
+  )) |> 
+  tbl_cross(row = Month, col = `Dose reduction`, 
+            percent = "row",
+            margin = NULL) |> 
+    bold_labels() |> 
+ gexptabph(exp = expx, nomfich = classeur,
+            nomsheet = "reduc", lg = TRUE)
+```

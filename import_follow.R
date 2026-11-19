@@ -46,6 +46,7 @@ tt <- read_ods("datas/FOLLOW.ods", sheet = 1, na = nn) |>
   mutate(agec = cut(age, c(00, 84, 89, 100),
     labels = c("80-84", "85-89", "> 89")
   )) |>
+  mutate(across(where(is.factor), fct_drop)) |>
   dplyr::select(-c(month_birth, year_birth)) |>
   mutate(ecog = as.factor(ecog)) |>
   mutate(igvh_status = fct_relevel(
@@ -79,14 +80,13 @@ tt <- tt |>
 tt <- tt |>
   mutate(type_treatment_1 =tolower(type_treatment_1)) |>
   mutate(tt1 = case_when(
-    str_detect(type_treatment_1, "venetocl")& str_detect(type_treatment_1, "inib") ~ "venetoclax + BTKi",
     str_detect(type_treatment_1, "venetocl") ~ "venetoclax",
     str_detect(type_treatment_1, "inib") ~ "BTKi",
     type_treatment_1 == "Other" ~ "Other",
     TRUE ~ "Autre traitement"
   )) |>
   mutate(tt1 = as.factor(tt1)) |>
-  mutate(tt1 = fct_relevel(tt1, "BTKi", "venetoclax", "venetoclax + BTKi", "Autre traitement" ))
+  mutate(tt1 = fct_relevel(tt1, "BTKi", "venetoclax", "Autre traitement" ))
 var_label(tt$tt1) <- "Traitement initial"
 
 
