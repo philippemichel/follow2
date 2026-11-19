@@ -27,7 +27,7 @@ library("survival")
 library("survminer")
 
 load("datas/follow.RData")
-expx <- FALSE
+expx <- TRUE
 classeur <- "follow_n_v1.ods"
 #
 ptest <- list(all_continuous() ~ "t.test", all_categorical() ~ "chisq.test")
@@ -81,9 +81,13 @@ tt |>
 #| tbl-cap: Données démographiques
 
 tt |> 
-  dplyr::select(sex:initial_diagnosis, ecog:score_cirs,tp53_status,igvh_status) |> 
-    tbl_summary(missing = "no",sort = all_categorical() ~ "frequency") |> 
-  add_ci() |> 
+  dplyr::select(sex:initial_diagnosis, ecog:score_cirs,tp53_status,igvh_status, prem_ligne ) |> 
+    tbl_summary(by = prem_ligne, missing = "no",
+                sort = all_categorical() ~ "frequency") |> 
+    add_overall() |>
+  add_ci( pattern = "{stat} [{ci}]") |> 
+add_p() |> 
+  bold_p() |> 
    modify_header(label = " ") |>
   bold_labels() |> 
   add_n() |> 
@@ -98,14 +102,19 @@ tt |>
 #| tbl-cap: Antécédents
 #| 
 tt |> 
-  dplyr::select(ischemic_heart_disease:any_other_comorbidity) |> 
+  dplyr::select(ischemic_heart_disease:renal_failure,opportunistic_infections:any_other_comorbidity,
+                prem_ligne) |> 
   dplyr::select(! starts_with("if")) |> 
-    tbl_summary(missing = "no",sort = all_categorical() ~ "frequency") |> 
-  add_ci() |> 
+    tbl_summary(by = prem_ligne,
+                missing = "no",sort = all_categorical() ~ "frequency") |> 
+    add_overall() |>
+  add_ci( pattern = "{stat} [{ci}]")  |> 
+add_p() |> 
+  bold_p() |>
    modify_header(label = " ") |>
   bold_labels() |> 
   add_n() |> 
-  gexptabph(exp = expx, nomfich = classeur , nomsheet = "demog", lg = TRUE)
+  gexptabph(exp = expx, nomfich = classeur , nomsheet = "atcd", lg = TRUE)
 
 ```
 
@@ -117,8 +126,8 @@ tt |>
 #| tbl-cap: Nombre de patients suivis
 
 zz <-  tt |> 
-  dplyr::select(starts_with("date_follow_up")) |> 
-  pivot_longer(cols = everything()) |> 
+  dplyr::select(prem_ligne,starts_with("date_follow_up")) |> 
+  pivot_longer(cols = starts_with("date_follow_up")) |> 
   mutate(across(everything(), as.factor)) |> 
   mutate(name = str_sub(name,-3)) |> 
   mutate(Month = case_when(
@@ -128,8 +137,10 @@ zz <-  tt |>
    
 
 zz |> 
-  dplyr::select(Month) |> 
-  tbl_summary(statistic = list( all_categorical() ~ "{n}")) |> 
+  dplyr::select(Month, prem_ligne) |> 
+  tbl_summary(by = prem_ligne, statistic = list( all_categorical() ~ "{n}")) |> 
+   modify_header(label = " ") |>
+    add_overall() |>
    modify_header(label = " ") |>
   bold_labels() |> 
   gexptabph(exp = expx, nomfich = classeur , nomsheet = "nsuivi", lg = TRUE)
@@ -162,12 +173,12 @@ tt |>
   #| label: tbl-tt1lig
 #| tbl-cap: Traitement de première intention ou non
 #| 
-  dplyr::select(tt1,patient_receive_a_treatment) |>
-  tbl_summary(by = patient_receive_a_treatment) |> 
+  dplyr::select(tt1,prem_ligne) |>
+  tbl_summary(by = prem_ligne) |> 
   add_p()|> 
+  add_ci( pattern = "{stat} [{ci}]")  |>
   bold_p() |>
   modify_header(label = "") |>
-  modify_spanning_header(all_stat_cols() ~ "**previous treatment**") |>
   bold_labels() |> 
     gexptabph(exp = expx, nomfich = classeur , nomsheet = "tt1lig", lg = TRUE)
 
@@ -180,7 +191,7 @@ tti <- tt |>
   dplyr::filter(patient_receive_a_treatment == "no") 
 ```
 
-On ne prend en compte que les patients en première ligne de traitement à l'inclusion soit `r nrow(tti)` patients.
+Sauf indication contraire tous les tableaux & figures suivants ne prennent en compte que les patients en première ligne de traitement à l'inclusion soit `r nrow(tti)` patients.
 
 ```{r}
 #| label: tbl-tt1
@@ -189,7 +200,7 @@ On ne prend en compte que les patients en première ligne de traitement à l'inc
 tti |> 
   dplyr::select(tt1) |> 
   tbl_summary() |> 
-  add_ci() |> 
+  add_ci( pattern = "{stat} [{ci}]")  |> 
    modify_header(label = " ") |>
   modify_spanning_header(all_stat_cols() ~ "**N (%)**") |>
   bold_labels() |> 
@@ -197,7 +208,7 @@ tti |>
 ```
 
 
-Un patient a reçu venetoclax & BTKi & a été classé en `venetoclax`.
+Un patient a reçu venetoclax + BTKi & a été classé en `venetoclax`.
 
 ## Traitement initial vs population
 
@@ -214,7 +225,6 @@ tti |>
   add_n() |> 
   bold_p() |>
    modify_header(label = " ") |>
-  modify_spanning_header(all_stat_cols() ~ "**N (%)**") |>
   bold_labels() |> 
   gexptabph(exp = expx, nomfich = classeur , nomsheet = "tt1demog", lg = FALSE)
 ```
@@ -237,7 +247,6 @@ tti |>
   add_n() |> 
     bold_p() |>
    modify_header(label = " ") |>
-  modify_spanning_header(all_stat_cols() ~ "**N (%)**") |>
   bold_labels() |> 
   gexptabph(exp = expx, nomfich = classeur , nomsheet = "tt1atcd", lg = TRUE)
 ```
@@ -257,6 +266,7 @@ tt |>
   tbl_summary( missing = "no",sort = all_categorical() ~ "frequency") |> 
   add_n() |> 
    modify_header(label = " ") |>
+    add_ci( pattern = "{stat} [{ci}]")  |> 
   bold_labels() |> 
   gexptabph(exp = expx, nomfich = classeur,
             nomsheet = "ttav1", lg = TRUE)
@@ -284,15 +294,18 @@ typ |>
   tbl_summary( missing = "no",
                sort = all_categorical() ~ "frequency") |> 
   add_n() |> 
+    add_ci( pattern = "{stat} [{ci}]")  |> 
    modify_header(label = " ") |>
   bold_labels() |> 
   gexptabph(exp = expx, nomfich = classeur , nomsheet = "tt1av2", lg = TRUE)
 ```
 
 
-# Courbe de survie
+# Courbes de survie
 
 ## Survie globale 
+
+### Survie simple (uniquement mortalité)
 
 ```{r}
 #| label: fig-surv_glob
@@ -305,7 +318,7 @@ tt <- tt |>
   mutate(dcd = if_else(status_at_end_study == "Death", 1, 0, missing = 0)) |> 
   mutate(suivi = as.numeric(dmax - date_inclusion)/30.5)
 dd <- Surv(time = tt$suivi, event = tt$dcd)
-ddt <- survfit(dd ~ tt$agec)
+ddt <- survfit(dd ~ 1)
 ggsurvplot(
   ddt,
   data = tt,
@@ -316,9 +329,12 @@ ggsurvplot(
   title = "Kaplan-Meier survival curve",
   legend.title = "Survival curve",
   risk.table.y.text.col = TRUE,
-  risk.table.y.text = FALSE
+  risk.table.y.text = FALSE,
+    surv.median.line = "hv"
 )
 ```
+
+### Survie sans rechute
 
 ```{r}
 #| label: fig-surv_rech
@@ -334,10 +350,38 @@ tt <- tt |>
                         if_relapse_date_m24, if_relapse_date_m36)) |> 
   mutate(repl = stringr::str_replace_all(repl,"NA","")) |> 
    mutate(dmax= ymd(str_sub(paste0(repl,dmax),1,10))) |> 
-  mutate(dcd = ifelse(repl >1 ,1, dcd))
+  mutate(dcd2 = ifelse(repl >1 ,1, dcd))
 
 dd <- Surv(time = tt$suivi, event = tt$dcd)
-ddt <- survfit(dd ~ tt1 + agec, data = tt)
+ddt <- survfit(dd ~ 1 , data = tt)
+ggsurvplot(
+  ddt,
+  data = tt,
+  risk.table = TRUE,
+  conf.int = TRUE,
+  palette = "jco",
+  xlab = "Time in months",
+  ylab = "Survival probability",
+  title = "Survie sans rechute",
+  subtitle = "Kaplan-Meier survival curve",
+  risk.table.y.text.col = TRUE,
+  risk.table.y.text = FALSE, 
+  break.x.by = 6,
+  xxlim = c(0, 36),
+  surv.median.line = "hv"
+  #legend.labs = c("80-84", "85-89","=>90")
+) 
+```
+
+## Selon le traitement
+
+```{r}
+#| label: fig-surv_rech_tt
+#| fig-cap: "Courbe de survie sans rechute vs traitement"
+
+
+dd <- Surv(time = tt$suivi, event = tt$dcd2)
+ddt <- survfit(dd ~ tt1 , data = tt)
 ggsurvplot(
   ddt,
   data = tt,
@@ -348,25 +392,87 @@ ggsurvplot(
   palette = "jco",
   xlab = "Time in months",
   ylab = "Survival probability",
-  title = "Survie sans rechute",
+  title = "Courbe de survie sans rechute vs traitement",
   subtitle = "Kaplan-Meier survival curve",
   risk.table.y.text.col = TRUE,
   risk.table.y.text = FALSE, 
   break.x.by = 6,
-  xlim = c(0, 40),
+  xlim = c(0, 36),
   surv.median.line = "hv",
-  legend.title = "Âge",
-  #legend.labs = c("80-84", "85-89","=>90")
+  legend.title = "",
+  legend.labs = levels(tt$tt1)
 ) 
 ```
 
-# Rechutes 
+## Selon la mutation TP53
 
 ```{r}
-#| label: rechute
-#| tbl-cap: Rechutes
+#| label: fig-surv_rech_tp53
+#| fig-cap: "Courbe de survie sans rechute vs traitement"
 
-tt |> 
+
+dd <- Surv(time = tt$suivi, event = tt$dcd2)
+ddt <- survfit(dd ~ tp53_status , data = tt)
+ggsurvplot(
+  ddt,
+  data = tt,
+  risk.table = TRUE,
+  conf.int = FALSE,
+  pval = TRUE,
+  pval.method = TRUE,
+  palette = "jco",
+  xlab = "Time in months",
+  ylab = "Survival probability",
+  title = "Courbe de survie sans rechute vs mutation TP53",
+  subtitle = "Kaplan-Meier survival curve",
+  risk.table.y.text.col = TRUE,
+  risk.table.y.text = FALSE, 
+  break.x.by = 6,
+  xlim = c(0, 36),
+  surv.median.line = "hv",
+  legend.title = "",
+  legend.labs = levels(tt$tp53_status)
+) 
+```
+
+## Selon la mutation TP53
+
+```{r}
+#| label: fig-surv_rech_oms
+#| fig-cap: "Courbe de survie sans rechute vs
+#|  statut OMS"
+#| fig-asp: 1
+
+dd <- Surv(time = tt$suivi, event = tt$dcd2)
+ddt <- survfit(dd ~ ecog  , data = tt)
+ggsurvplot(
+  ddt,
+  data = tt,
+  risk.table = TRUE,
+  conf.int = TRUE,
+  pval = TRUE,
+  pval.method = TRUE,
+  palette = "jco",
+  xlab = "Time in months",
+  ylab = "Survival probability",
+  title = "Courbe de survie sans rechute vs ECOG",
+  subtitle = "Kaplan-Meier survival curve",
+  risk.table.y.text.col = TRUE,
+  risk.table.y.text = FALSE, 
+  break.x.by = 6,
+  xlim = c(0, 36),
+  surv.median.line = "hv",
+  legend.title = "ECOG",
+  legend.labs = levels(tt$ecog)
+) 
+```
+# Devenir
+
+```{r}
+#| label: evol1
+#| tbl-cap: Évolution 
+
+tti |> 
   dplyr::select(starts_with("if_alive_disease_Status")) |>
   pivot_longer(cols = everything(), names_to =  "Month",
 values_to = "Status") |> 
@@ -388,6 +494,29 @@ values_to = "Status") |>
  gexptabph(exp = expx, nomfich = classeur,
             nomsheet = "rechute", lg = TRUE)
 ```
+
+## À 12 mois vs traitement initial
+
+```{r}
+#| label: tbl-m12-tt
+#| tbl-cap: Devenir à 12 mois vs traitement initial
+
+
+tti |> 
+  dplyr::select(tt1,if_alive_disease_status_m12) |> 
+  tbl_summary(by = tt1, 
+              missing = "no") |> 
+  add_p() |>
+  add_n() |> 
+    bold_p() |>
+   modify_header(label = " ") |>
+  bold_labels() |> 
+  gexptabph(exp = expx, nomfich = classeur , nomsheet = "m12-tt", lg = TRUE)
+```
+
+
+
+
 
 # Réduction de dose
 
@@ -418,3 +547,31 @@ tt |>
  gexptabph(exp = expx, nomfich = classeur,
             nomsheet = "reduc", lg = TRUE)
 ```
+
+
+## Selon le traitement initial
+
+```{r}
+#| label: reduction_tt1
+#| tbl-cap: Réduction de doses vs traitement initial
+tti |> 
+  dplyr::select(starts_with("if_treatment_ongoing_dosage_reduction")) |> 
+  mutate(across(everything(), ~ ifelse(. == "yes", 1, 0))) |> 
+  rowwise() |> 
+  mutate(red = sum(c_across(1:8), na.rm = TRUE)) |> 
+  ungroup() |> 
+  mutate(red = ifelse(red > 0, "yes", "no")) |>
+  mutate(tt1 = tti$tt1) |> 
+  dplyr::select(tt1,red) |> 
+  tbl_summary(
+    by = red) |> 
+  add_p() |>
+  add_n() |> 
+    add_ci( pattern = "{stat} [{ci}]")  |>
+    bold_p() |>
+   modify_header(label = " ") |>
+  bold_labels() |> 
+  modify_spanning_header(c("stat_1", "stat_2") ~ "**Dosage reduction**") |> 
+  gexptabph(exp = expx, nomfich = classeur , nomsheet = "reduction_tt1", lg = TRUE)
+```
+

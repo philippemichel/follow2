@@ -63,6 +63,9 @@ tt <- read_ods("datas/FOLLOW.ods", sheet = 1, na = nn) |>
     "2, 3, 4" = "2",
     "2, 3, 4" = "3"
   )) |>
+  mutate(prem_ligne =
+           ifelse(patient_receive_a_treatment == "yes","Relapse",
+                  "First line")) |>
   remove_empty()
 
 cardio <- tt |>
@@ -78,7 +81,7 @@ tt <- tt |>
 
 
 tt <- tt |>
-  mutate(type_treatment_1 =tolower(type_treatment_1)) |>
+  mutate(type_treatment_1 = tolower(type_treatment_1)) |>
   mutate(tt1 = case_when(
     str_detect(type_treatment_1, "venetocl") ~ "venetoclax",
     str_detect(type_treatment_1, "inib") ~ "BTKi",
@@ -86,11 +89,8 @@ tt <- tt |>
     TRUE ~ "Autre traitement"
   )) |>
   mutate(tt1 = as.factor(tt1)) |>
-  mutate(tt1 = fct_relevel(tt1, "BTKi", "venetoclax", "Autre traitement" ))
+  mutate(tt1 = fct_relevel(tt1, "BTKi", "venetoclax", "Autre traitement"))
 var_label(tt$tt1) <- "Traitement initial"
-
-
-
 
 
 # var_label(tt$tt_ant) <- "Previous Treatment"
@@ -103,9 +103,6 @@ var_label(tt$tt1) <- "Traitement initial"
 # var_label(tt$tp53_status) <- "TP53 Status"
 # var_label(tt$cardio) <- "Cardiovascular Comorbidities"
 # var_label(tt$score_cirs) <- "Score CIRS"
-
-
-
 
 
 #
