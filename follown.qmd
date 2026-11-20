@@ -1,5 +1,5 @@
 ---
-subtitle: "Rapport statistique V0.2"
+subtitle: "Rapport statistique V0.3"
 cache: false
 ---
 
@@ -28,7 +28,7 @@ library("survminer")
 
 load("datas/follow.RData")
 expx <- TRUE
-classeur <- "follow_n_v1.ods"
+classeur <- "follow_n_v2.ods"
 #
 ptest <- list(all_continuous() ~ "t.test", all_categorical() ~ "chisq.test")
 stt <- list(
@@ -54,7 +54,10 @@ scale_colour_cav <- function(...) scale_colour_viridis_d(option = "plasma", begi
 
 # Échantillon
 
-L'échantillon comporte `r nrow(tt)` cas pour `r ncol(tt)` variables utilisables : les variables vides ou constantes ont été supprimées ains que les "if\dots" comportant trop peu de réponses. 
+L'échantillon comporte `r nrow(tt)` cas pour 
+`r ncol(tt)` variables utilisables : 
+les variables vides ou constantes ont été
+supprimées ainsi que les "if\dots" comportant trop peu de réponses. 
 
 ## Données manquantes
 
@@ -309,25 +312,26 @@ typ |>
 
 ```{r}
 #| label: fig-surv_glob
-#| fig-cap: Courbe de survie
+#| fig-cap: Courbe de survie (mortalité)
 
-tt <- tt |> 
+ttc <- tti |> 
   rowwise() |> 
   mutate(dmax = max(c_across(starts_with("date_")), na.rm = TRUE)) |> 
   ungroup() |> 
   mutate(dcd = if_else(status_at_end_study == "Death", 1, 0, missing = 0)) |> 
   mutate(suivi = as.numeric(dmax - date_inclusion)/30.5)
-dd <- Surv(time = tt$suivi, event = tt$dcd)
+dd <- Surv(time = ttc$suivi, event = ttc$dcd)
 ddt <- survfit(dd ~ 1)
 ggsurvplot(
   ddt,
-  data = tt,
+  data = ttc,
   risk.table = TRUE,
   conf.int = TRUE,
   xlab = "Time in months",
   ylab = "Survival probability",
-  title = "Kaplan-Meier survival curve",
-  legend.title = "Survival curve",
+  title = "Survie",
+  subtitle = "Kaplan-Meier survival curve",
+  legend = "none",
   risk.table.y.text.col = TRUE,
   risk.table.y.text = FALSE,
     surv.median.line = "hv"
@@ -336,11 +340,13 @@ ggsurvplot(
 
 ### Survie sans rechute
 
+On censure sur la mortalité & la rechute.
+
 ```{r}
 #| label: fig-surv_rech
 #| fig-cap: Courbe de survie ou rechute
 
-tt <- tt |> 
+ttc <- tti |> 
   rowwise() |> 
   mutate(dmax = max(c_across(starts_with("date_")), na.rm = TRUE)) |> 
   ungroup() |> 
@@ -352,11 +358,11 @@ tt <- tt |>
    mutate(dmax= ymd(str_sub(paste0(repl,dmax),1,10))) |> 
   mutate(dcd2 = ifelse(repl >1 ,1, dcd))
 
-dd <- Surv(time = tt$suivi, event = tt$dcd)
-ddt <- survfit(dd ~ 1 , data = tt)
+dd <- Surv(time = ttc$suivi, event = ttc$dcd)
+ddt <- survfit(dd ~ 1 , data = ttc)
 ggsurvplot(
   ddt,
-  data = tt,
+  data = ttc,
   risk.table = TRUE,
   conf.int = TRUE,
   palette = "jco",
@@ -368,9 +374,11 @@ ggsurvplot(
   risk.table.y.text = FALSE, 
   break.x.by = 6,
   xxlim = c(0, 36),
+    legend = "none",
   surv.median.line = "hv"
   #legend.labs = c("80-84", "85-89","=>90")
 ) 
+  
 ```
 
 ## Selon le traitement
@@ -380,11 +388,11 @@ ggsurvplot(
 #| fig-cap: "Courbe de survie sans rechute vs traitement"
 
 
-dd <- Surv(time = tt$suivi, event = tt$dcd2)
-ddt <- survfit(dd ~ tt1 , data = tt)
+dd <- Surv(time = ttc$suivi, event = ttc$dcd2)
+ddt <- survfit(dd ~ tt1 , data = ttc)
 ggsurvplot(
   ddt,
-  data = tt,
+  data = ttc,
   risk.table = TRUE,
   conf.int = FALSE,
   pval = TRUE,
@@ -408,14 +416,15 @@ ggsurvplot(
 
 ```{r}
 #| label: fig-surv_rech_tp53
-#| fig-cap: "Courbe de survie sans rechute vs traitement"
+#| fig-cap: "Courbe de survie sans rechute 
+#| vs mutation TP53"
 
 
-dd <- Surv(time = tt$suivi, event = tt$dcd2)
-ddt <- survfit(dd ~ tp53_status , data = tt)
+dd <- Surv(time = ttc$suivi, event = ttc$dcd2)
+ddt <- survfit(dd ~ tp53_status , data = ttc)
 ggsurvplot(
   ddt,
-  data = tt,
+  data = ttc,
   risk.table = TRUE,
   conf.int = FALSE,
   pval = TRUE,
@@ -435,7 +444,7 @@ ggsurvplot(
 ) 
 ```
 
-## Selon la mutation TP53
+## Selon le status OMS
 
 ```{r}
 #| label: fig-surv_rech_oms
@@ -443,11 +452,11 @@ ggsurvplot(
 #|  statut OMS"
 #| fig-asp: 1
 
-dd <- Surv(time = tt$suivi, event = tt$dcd2)
-ddt <- survfit(dd ~ ecog  , data = tt)
+dd <- Surv(time = ttc$suivi, event = ttc$dcd2)
+ddt <- survfit(dd ~ ecog  , data = ttc)
 ggsurvplot(
   ddt,
-  data = tt,
+  data = ttc,
   risk.table = TRUE,
   conf.int = TRUE,
   pval = TRUE,
@@ -574,4 +583,28 @@ tti |>
   modify_spanning_header(c("stat_1", "stat_2") ~ "**Dosage reduction**") |> 
   gexptabph(exp = expx, nomfich = classeur , nomsheet = "reduction_tt1", lg = TRUE)
 ```
+
+# Compléments
+
+**Réponses à  la demande du 20/11**
+
+```{r}
+#| label: tbl-tt2
+#| tbl-cap: Traitements de première ligne
+
+tt |> 
+  tbl_cross(type_treatment_1,tt1,
+            missing = "no") |> 
+  bold_labels() |> 
+  gexptabph(exp = expx, nomfich = classeur , nomsheet = "tt2", lg = TRUE)
+```
+
+## Courbes de survie
+
+La première courbe ne prend en compte que la mortalité. 
+Pour toutes les autres le décès & la rechute ont été pris comme censure.
+IL s'agit donc de la survie sans rechute. Les courbes ne concernent que les patients en première ligne de traitement à l'inclusion.
+
+
+Toutes les courbes de survie ont été refaites.
 
